@@ -1,2 +1,2 @@
 # NURA_2026rocket
-Seoul National University of Science and Technology "MACH1NE" TEAM
+서울과학기술대학교 MACH1NE팀
