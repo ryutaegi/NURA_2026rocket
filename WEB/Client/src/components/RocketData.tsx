@@ -1,6 +1,5 @@
 import { RocketTelemetry } from './MainPage';
-import { Gauge, Thermometer, Wind, Battery } from 'lucide-react';
-
+import { Gauge, Thermometer, Wind, Battery, MapPin } from 'lucide-react';
 interface RocketDataProps {
   telemetry: RocketTelemetry;
 }
@@ -58,12 +57,29 @@ export default function RocketData({ telemetry }: RocketDataProps) {
 
       {/* 좌표 정보 */}
       <div className="mt-4 bg-gray-800 rounded-lg p-4">
-        <div className="text-sm text-gray-400 mb-2">GPS 좌표</div>
-        <div className="text-xs text-white font-mono">
-          <div>위도: {telemetry.latitude.toFixed(6)}°</div>
-          <div>경도: {telemetry.longitude.toFixed(6)}°</div>
+        <div className="flex items-center gap-2 mb-2">
+          <MapPin className="w-5 h-5 text-red-400" />
+          <span className="text-sm text-gray-400">GPS 좌표</span>
         </div>
-      </div>
-    </div>
+
+        
+       
+
+        <div className="text-sm text-white space-y-1"></div>
+        <div className="flex items-center justify-between">
+            <span className="text-gray-400">위도</span>
+            <span className="font-mono text-red-400">{telemetry.latitude.toFixed(6)}°</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-gray-400">경도</span>
+            <span className="font-mono text-red-400">{telemetry.longitude.toFixed(6)}°</span>
+          </div>
+        </div>
+
+        </div>
+        
+      
+  
   );
 }
+
