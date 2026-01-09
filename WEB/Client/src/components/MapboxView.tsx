@@ -43,6 +43,12 @@ export default function MapboxView({ telemetry }: MapboxViewProps) {
 
     mapRef.current = map;
 
+    const resizeObserver = new ResizeObserver(() => {
+      map.resize();
+    });
+
+    resizeObserver.observe(mapContainerRef.current);
+
     // Three.js 3D 모델을 위한 커스텀 레이어
     const customLayer: CustomLayerInterface = {
       id: '3d-model',
@@ -164,6 +170,7 @@ export default function MapboxView({ telemetry }: MapboxViewProps) {
     });
 
     return () => {
+      resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
     };

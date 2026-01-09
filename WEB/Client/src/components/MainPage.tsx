@@ -47,7 +47,24 @@ export default function MainPage() {
   const [isReplayPlaying, setIsReplayPlaying] = useState(false);
   const [replaySpeed, setReplaySpeed] = useState(1);
   const [replayData, setReplayData] = useState<any>(null);
+  const [showConnectedBanner, setShowConnectedBanner] = useState(false);
   const recordingStartTime = useRef<number>(0);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isConnected) {
+      setShowConnectedBanner(true);
+      timer = setTimeout(() => {
+        setShowConnectedBanner(false);
+      }, 3000);
+    } else {
+      setShowConnectedBanner(false); // 연결이 끊어지면 즉시 숨김
+    }
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [isConnected]);
 
   // WebSocket 메시지 처리
   useEffect(() => {
@@ -196,13 +213,19 @@ export default function MainPage() {
   return (
     <div className="h-[calc(100vh-4rem)] p-4 overflow-hidden flex flex-col">
       {/* 연결 상태 표시 */}
-      {!isReplayMode && (
-        <div className={`px-4 py-2 rounded-lg mb-4 flex items-center justify-between ${
-          isConnected ? 'bg-green-600' : 'bg-red-600'
-        } text-white`}>
+      {!isReplayMode && !isConnected && (
+        <div className="bg-red-600 text-white px-4 py-2 rounded-lg mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Circle className={`h-3 w-3 ${isConnected ? 'animate-pulse' : ''}`} fill="currentColor" />
-            <span>{isConnected ? '백엔드 서버 연결됨' : '백엔드 서버 연결 안됨 (localhost:3001)'}</span>
+            <Circle className="h-3 w-3" fill="currentColor" />
+            <span>백엔드 서버 연결 안됨 (localhost:3001)</span>
+          </div>
+        </div>
+      )}
+      {!isReplayMode && showConnectedBanner && (
+         <div className="bg-green-600 text-white px-4 py-2 rounded-lg mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Circle className="h-3 w-3 animate-pulse" fill="currentColor" />
+            <span>백엔드 서버 연결됨</span>
           </div>
         </div>
       )}
