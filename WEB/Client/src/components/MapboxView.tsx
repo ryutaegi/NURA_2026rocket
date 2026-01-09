@@ -14,29 +14,19 @@ mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
 
 const modelOrigin = [126.9780, 37.5665] as [number, number];
 const modelAltitude = 0;
-const modelRotate = [Math.PI / 2, 0, 0];
 
 const modelAsMercatorCoordinate = mapboxgl.MercatorCoordinate.fromLngLat(
   modelOrigin,
   modelAltitude
 );
 
-const modelTransform = {
-  translateX: modelAsMercatorCoordinate.x,
-  translateY: modelAsMercatorCoordinate.y,
-  translateZ: modelAsMercatorCoordinate.z,
-  rotateX: modelRotate[0],
-  rotateY: modelRotate[1],
-  rotateZ: modelRotate[2],
-  scale: modelAsMercatorCoordinate.meterInMercatorCoordinateUnits() * 20, // 모델 크기 조절
-};
-
 export default function MapboxView({ telemetry }: MapboxViewProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const modelRef = useRef<THREE.Group>();
+  const lineRef = useRef<THREE.Line>();
   const customLayerRef = useRef<CustomLayerInterface>();
-  const [trajectory, setTrajectory] = useState<[number, number][]>([]); // 로켓 궤적 저장을 위한 상태
+  const pointIndexRef = useRef(0);
 
   useEffect(() => {
     if (mapRef.current || !mapContainerRef.current) return;
@@ -72,17 +62,11 @@ export default function MapboxView({ telemetry }: MapboxViewProps) {
         // GLTF 모델 로드
         const loader = new GLTFLoader();
         loader.load(
-          '/sci-fi_rocket/scene.gltf', // Vite는 public 폴더를 자동으로 서빙
+          '/sci-fi_rocket/scene.gltf',
           (gltf) => {
             const model = gltf.scene;
-            
-            // 모델의 바닥을 고도 0에 맞추기 위한 오프셋 계산
-            const box = new THREE.Box3().setFromObject(model);
-            const size = new THREE.Vector3();
-            box.getSize(size);
-            // 모델의 중심이 아닌, 바닥을 기준으로 위치를 잡기 위해 y축으로 높이의 절반만큼 이동
-            model.position.y = size.y / 2;
-
+            const scale = modelAsMercatorCoordinate.meterInMercatorCoordinateUnits() * 30;
+            model.scale.set(scale, scale, scale);
             modelRef.current = model;
             this.scene.add(model);
           },
@@ -92,6 +76,16 @@ export default function MapboxView({ telemetry }: MapboxViewProps) {
             alert('3D 모델 로딩에 실패했습니다. /public/sci-fi_rocket/ 폴더에 모델 파일이 있는지 확인하세요.');
           }
         );
+        
+        // Trajectory Line
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
+        const MAX_POINTS = 10000;
+        const lineGeometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(MAX_POINTS * 3);
+        lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const line = new THREE.Line(lineGeometry, lineMaterial);
+        lineRef.current = line;
+        this.scene.add(line);
 
         this.map = map;
         this.renderer = new THREE.WebGLRenderer({
@@ -102,27 +96,12 @@ export default function MapboxView({ telemetry }: MapboxViewProps) {
         this.renderer.autoClear = false;
       },
       render: function (gl, matrix) {
-        const rotationX = new THREE.Matrix4().makeRotationX(modelTransform.rotateX);
-        const rotationY = new THREE.Matrix4().makeRotationY(modelTransform.rotateY);
-        const rotationZ = new THREE.Matrix4().makeRotationZ(modelTransform.rotateZ);
-        
         const m = new THREE.Matrix4().fromArray(matrix);
-        const l = new THREE.Matrix4()
-          .makeTranslation(
-            modelTransform.translateX,
-            modelTransform.translateY,
-            modelTransform.translateZ
-          )
-          .scale(
-            new THREE.Vector3(
-              modelTransform.scale,
-              -modelTransform.scale,
-              modelTransform.scale
-            )
-          )
-          .multiply(rotationX)
-          .multiply(rotationY)
-          .multiply(rotationZ);
+        const l = new THREE.Matrix4().makeTranslation(
+          modelAsMercatorCoordinate.x,
+          modelAsMercatorCoordinate.y,
+          modelAsMercatorCoordinate.z
+        );
 
         this.camera.projectionMatrix = m.multiply(l);
         this.renderer.resetState();
@@ -135,8 +114,9 @@ export default function MapboxView({ telemetry }: MapboxViewProps) {
 
     map.on('load', () => {
       map.addLayer(customLayer);
-      map.addSource('trajectory', {
+      /* map.addSource('trajectory', {
         type: 'geojson',
+        lineMetrics: true,
         data: {
           type: 'Feature',
           properties: {},
@@ -145,9 +125,9 @@ export default function MapboxView({ telemetry }: MapboxViewProps) {
             coordinates: [],
           },
         },
-      });
+      }); */
 
-      map.addLayer({
+      /* map.addLayer({
         id: 'trajectory-line',
         type: 'line',
         source: 'trajectory',
@@ -156,10 +136,18 @@ export default function MapboxView({ telemetry }: MapboxViewProps) {
           'line-cap': 'round',
         },
         paint: {
-          'line-color': '#FF0000', // 빨간색 선
+          'line-gradient': [
+            'interpolate',
+            ['linear'],
+            ['line-progress'],
+            0,
+            '#FF0000',
+            1,
+            '#FF0000',
+          ],
           'line-width': 3,
         },
-      });
+      }); */
       map.addSource('mapbox-dem', {
         type: 'raster-dem',
         url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
@@ -183,44 +171,62 @@ export default function MapboxView({ telemetry }: MapboxViewProps) {
 
   // 텔레메트리 데이터 변경 시 모델 위치 및 방향 업데이트
   useEffect(() => {
-    if (mapRef.current && modelRef.current) {
+    if (mapRef.current && modelRef.current && lineRef.current) {
         const map = mapRef.current;
         const model = modelRef.current;
+        const line = lineRef.current;
 
-        // 궤적 업데이트
-        setTrajectory((prev) => [...prev, [telemetry.longitude, telemetry.latitude]]);
-        
-        // 1. 위치 업데이트
-        const mercator = mapboxgl.MercatorCoordinate.fromLngLat(
+        // 1. 새 텔레메트리 데이터의 월드 좌표(메르카토르) 계산
+        const currentMercator = mapboxgl.MercatorCoordinate.fromLngLat(
             { lng: telemetry.longitude, lat: telemetry.latitude },
             telemetry.altitude
         );
-        
-        modelTransform.translateX = mercator.x;
-        modelTransform.translateY = mercator.y;
-        modelTransform.translateZ = mercator.z;
 
-        // 2. 방향 업데이트 (pitch, roll, yaw -> x, y, z)
-        // three.js는 Radians를 사용, ZYX 순서로 적용
-        model.rotation.set(
-            telemetry.pitch * (Math.PI / 180),
-            telemetry.yaw * (Math.PI / 180), // Yaw를 Y축 회전으로 매핑
-            telemetry.roll * (Math.PI / 180)  // Roll을 Z축 회전으로 매핑
+        // 2. Scene 원점을 기준으로 한 상대 좌표 계산
+        const relativePosition = new THREE.Vector3(
+          currentMercator.x - modelAsMercatorCoordinate.x,
+          currentMercator.y - modelAsMercatorCoordinate.y,
+          currentMercator.z - modelAsMercatorCoordinate.z
         );
+
+        // 3. 모델 위치 업데이트
+        model.position.copy(relativePosition);
+
+        // 4. 모델 방향 업데이트
+        model.rotation.set(
+            telemetry.pitch * (Math.PI / 180) + Math.PI / 2, // 기본 X축 90도 회전 + pitch
+            telemetry.roll * (Math.PI / 180),
+            telemetry.yaw * (Math.PI / 180)
+        );
+        
+        // 5. 궤적 업데이트 (미리 할당된 버퍼 사용)
+        const index = pointIndexRef.current;
+        const linePositions = line.geometry.attributes.position.array as Float32Array;
+        
+        if (index < (linePositions.length / 3)) {
+          linePositions[index * 3] = relativePosition.x;
+          linePositions[index * 3 + 1] = relativePosition.y;
+          linePositions[index * 3 + 2] = relativePosition.z;
+          
+          line.geometry.attributes.position.needsUpdate = true;
+          line.geometry.setDrawRange(0, index + 1);
+          
+          pointIndexRef.current++;
+        }
         
         map.triggerRepaint();
 
-        // 3. 카메라 따라가기
+        // 6. 카메라 따라가기
         map.flyTo({
             center: [telemetry.longitude, telemetry.latitude],
             speed: 0.8,
             curve: 1,
-            essential: true, // 애니메이션 중 사용자 입력이 있어도 중단되지 않음
+            essential: true,
         });
     }
   }, [telemetry]);
 
-  // 궤적 데이터 변경 시 Mapbox Source 업데이트
+  /* // 궤적 데이터 변경 시 Mapbox Source 업데이트
   useEffect(() => {
     if (mapRef.current) {
       const map = mapRef.current;
@@ -235,7 +241,7 @@ export default function MapboxView({ telemetry }: MapboxViewProps) {
         });
       }
     }
-  }, [trajectory]);
+  }, [trajectory]); */
 
   return (
     <div className="relative w-full h-full">

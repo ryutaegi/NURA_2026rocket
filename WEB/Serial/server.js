@@ -48,6 +48,34 @@ try {
 
   serialPort.on('error', (err) => {
     console.error('시리얼 포트 에러:', err.message);
+    setInterval(() => { //에러 나면 테스트코드 송출
+      const telemetryData = {
+        timestamp: Date.now(),
+        latitude: 37.5665 + Math.random() * 0.001,
+        longitude: 126.9780 + Math.random() * 0.001,
+        altitude: Math.random() * 1000,
+        speed: Math.random() * 100,
+        pitch: Math.random() * 10 - 5,
+        roll: Math.random() * 10 - 5,
+        yaw: Math.random() * 5 - 2.5,
+        temperature: 22 + Math.random() * 3,
+        pressure: 1013 - Math.random() * 10,
+        battery: 100 - Math.random() * 10,
+      };
+  
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'telemetry',
+            data: telemetryData,
+          }));
+        }
+      });
+  
+      if (isRecording) {
+        recordedData.push(telemetryData);
+      }
+    }, 1000);
   });
 
   // 아두이노에서 데이터 수신
@@ -73,6 +101,7 @@ try {
 
       // 웹소켓으로 모든 클라이언트에게 전송
       wss.clients.forEach((client) => {
+        console.log(telemetryData)
         if (client.readyState === WebSocket.OPEN) {
           client.send(JSON.stringify({
             type: 'telemetry',
