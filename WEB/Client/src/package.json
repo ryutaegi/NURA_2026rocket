@@ -1,0 +1,14 @@
+{
+  "name": "rocket-tracking-system",
+  "version": "1.0.0",
+  "description": "로켓 추적 및 관리 시스템 백엔드",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.14.2",
+    "serialport": "^12.0.0"
+  }
+}

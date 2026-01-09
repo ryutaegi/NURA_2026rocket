@@ -1,0 +1,14 @@
+{
+  "id": "1767845925400",
+  "date": "2026-01-08T04:18:45.400Z",
+  "launchSite": "나로우주센터",
+  "duration": 2.299,
+  "telemetryData": [],
+  "maxAltitude": null,
+  "maxSpeed": null,
+  "status": "success",
+  "landingCoords": {
+    "lat": 37.5665,
+    "lng": 126.978
+  }
+}

@@ -1,0 +1,17 @@
+# Dependencies
+/node_modules
+
+# Build artifacts
+/dist
+/build
+
+# Environment variables
+.env
+.env*.local
+
+# IDE config
+.vscode/
+.idea/
+
+# OS-specific
+.DS_Store
