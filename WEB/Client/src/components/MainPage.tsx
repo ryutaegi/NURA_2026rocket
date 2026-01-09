@@ -51,7 +51,7 @@ export default function MainPage() {
 
   // WebSocket 메시지 처리
   useEffect(() => {
-    if (!lastMessage) return;
+    if (!lastMessage || isReplayMode) return;
 
     if (lastMessage.type === 'telemetry') {
       // 실시간 텔레메트리 데이터 수신
