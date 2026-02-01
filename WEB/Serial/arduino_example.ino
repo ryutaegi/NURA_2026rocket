@@ -1,55 +1,64 @@
 // 아두이노 예제 코드
-// 센서 데이터를 JSON 형식으로 시리얼 통신으로 전송
+// 센서 데이터를 효율적인 바이너리 패킷으로 시리얼 통신을 통해 전송합니다.
 
-// 필요한 라이브러리 (예시)
-// #include <Wire.h>
-// #include <Adafruit_BMP280.h>
-// #include <MPU6050.h>
-// #include <TinyGPS++.h>
+// 데이터 패킷 구조체 정의
+// __attribute__((packed))는 컴파일러가 임의로 패딩을 추가하지 못하게 하여
+// 송/수신간의 데이터 크기를 정확히 일치시킵니다.
+struct __attribute__((packed)) FlightDataPacket {
+  // 시작을 알리는 Sync Byte (1 byte)
+  const uint8_t start_byte = 0xAA;
+
+  // 데이터 필드 (34 bytes)
+  float roll;
+  float pitch;
+  float yaw;
+  float lat;
+  float lon;
+  float alt;
+  float temp;
+  float hum;
+  uint8_t para;  // 0 or 1
+  uint8_t phase; // FlightState enum 값
+
+  // 간단한 체크섬 (모든 데이터 바이트를 더한 값) (1 byte)
+  uint8_t checksum;
+}; // 총 36 바이트
+
+// 패킷 생성 및 전송
+void sendData() {
+  FlightDataPacket packet;
+
+  // 랜덤 값으로 센서 데이터 채우기
+  packet.roll = random(-18000, 18000) / 100.0;
+  packet.pitch = random(-18000, 18000) / 100.0;
+  packet.yaw = random(0, 36000) / 100.0;
+  packet.lat = random(37000000, 38000000) / 1000000.0;
+  packet.lon = random(126000000, 127000000) / 1000000.0;
+  packet.alt = random(0, 50000) / 100.0;
+  packet.temp = random(1000, 3000) / 100.0;
+  packet.hum = random(2000, 8000) / 100.0;
+  packet.para = random(0, 2);   // 0 or 1
+  packet.phase = random(0, 7);  // 0 to 6 (FlightState)
+
+  // 체크섬 계산
+  packet.checksum = 0;
+  uint8_t* bytes = (uint8_t*)&packet;
+  // start_byte는 제외하고 checksum 필드 전까지 더합니다.
+  for (size_t i = 1; i < sizeof(packet) - 1; ++i) {
+    packet.checksum += bytes[i];
+  }
+
+  // 시리얼 포트로 패킷 전송
+  Serial.write((uint8_t*)&packet, sizeof(packet));
+}
 
 void setup() {
-  Serial.begin(9600);
-  
-  // 센서 초기화
-  // GPS, IMU, 기압계 등 초기화
+  // 효율을 위해 통신 속도를 높입니다. server.js와 동일하게 맞춰야 합니다.
+  Serial.begin(115200); 
+  randomSeed(analogRead(0));
 }
 
 void loop() {
-  // 센서 데이터 읽기
-  float latitude = 37.5665;      // GPS 위도
-  float longitude = 126.9780;     // GPS 경도
-  float altitude = 0;             // 기압계로부터 고도
-  float speed = 0;                // GPS 속도
-  float pitch = 0;                // IMU pitch
-  float roll = 0;                 // IMU roll
-  float yaw = 0;                  // IMU yaw
-  float temperature = 22.0;       // 온도 센서
-  float pressure = 1013.25;       // 기압 센서
-  int battery = 100;              // 배터리 잔량
-
-  // JSON 형식으로 데이터 전송
-  Serial.print("{");
-  Serial.print("\"lat\":");
-  Serial.print(latitude, 6);
-  Serial.print(",\"lng\":");
-  Serial.print(longitude, 6);
-  Serial.print(",\"alt\":");
-  Serial.print(altitude, 2);
-  Serial.print(",\"speed\":");
-  Serial.print(speed, 2);
-  Serial.print(",\"pitch\":");
-  Serial.print(pitch, 2);
-  Serial.print(",\"roll\":");
-  Serial.print(roll, 2);
-  Serial.print(",\"yaw\":");
-  Serial.print(yaw, 2);
-  Serial.print(",\"temp\":");
-  Serial.print(temperature, 2);
-  Serial.print(",\"press\":");
-  Serial.print(pressure, 2);
-  Serial.print(",\"battery\":");
-  Serial.print(battery);
-  Serial.println("}");
-  
-  delay(1000); // 1초마다 전송
+  sendData();
+  delay(100); // 0.1초마다 전송
 }

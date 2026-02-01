@@ -16,11 +16,26 @@ export interface RocketTelemetry {
   pitch: number;
   roll: number;
   yaw: number;
-  stage: 'pre-launch' | 'launch' | 'ascent' | 'coasting' | 'descent' | 'parachute_deployment' | 'landed';
+  // stage는 이제 flightPhase 값에 따라 결정
+  stage: 'pre-launch' | 'launch' | 'powered' | 'coasting' | 'apogee' | 'descent' | 'landed';
   temperature: number;
   pressure: number;
   battery: number;
+  humidity: number; // 새로 추가
+  parachuteStatus: number; // 새로 추가 (0: 닫힘, 1: 열림)
+  flightPhase: number; // 새로 추가 (0: STANDBY, 1: LAUNCHED, ...)
 }
+
+// 아두이노 FlightState enum에 따른 매핑
+const flightPhaseToStageMap: { [key: number]: RocketTelemetry['stage'] } = {
+  0: 'pre-launch',    // STANDBY
+  1: 'launch',        // LAUNCHED
+  2: 'powered',       // POWERED
+  3: 'coasting',      // COASTING
+  4: 'apogee',        // APOGEE
+  5: 'descent',       // DESCENT
+  6: 'landed',        // LANDED
+};
 
 export default function MainPage() {
   const location = useLocation();
@@ -35,10 +50,13 @@ export default function MainPage() {
     pitch: 0,
     roll: 0,
     yaw: 0,
-    stage: 'pre-launch',
+    stage: 'pre-launch', // 초기값
     temperature: 22,
     pressure: 1013,
     battery: 100,
+    humidity: 0, // 초기값
+    parachuteStatus: 0, // 초기값
+    flightPhase: 0, // 초기값
   });
 
   const [isRecording, setIsRecording] = useState(false);
@@ -74,23 +92,6 @@ export default function MainPage() {
       // 실시간 텔레메트리 데이터 수신
       const data = lastMessage.data;
       
-      // 새로운 단계 판정 로직
-      let stage: RocketTelemetry['stage'] = 'pre-launch'; // 기본값
-
-      if (data.altitude <= 0.1 && data.speed <= 0.1) {
-        stage = 'landed';
-      } else if (data.altitude > 0.1 && data.speed > 0.1) { // 로켓이 움직이는 중
-        if (data.altitude <= 100) { // 지면에서 막 벗어남
-          stage = 'launch';
-        } else if (data.altitude <= 2000 && data.speed < 50) { // 낮은 고도에서 속도가 느리면 낙하산으로 추정
-          stage = 'parachute_deployment';
-        } else if (data.altitude <= 5000) { // 중간 고도: 상승 중
-          stage = 'ascent';
-        } else if (data.altitude > 5000) { // 높은 고도: 하강 중
-          stage = 'descent';
-        }
-      }
-
       setTelemetry({
         latitude: data.latitude,
         longitude: data.longitude,
@@ -99,10 +100,14 @@ export default function MainPage() {
         pitch: data.pitch,
         roll: data.roll,
         yaw: data.yaw,
-        stage,
+        // 서버에서 받은 flightPhase 값으로 stage를 결정
+        stage: flightPhaseToStageMap[data.flightPhase] || 'pre-launch',
         temperature: data.temperature,
         pressure: data.pressure,
         battery: data.battery,
+        humidity: data.humidity, // 새로운 필드
+        parachuteStatus: data.parachuteStatus, // 새로운 필드
+        flightPhase: data.flightPhase, // 새로운 필드
       });
     } else if (lastMessage.type === 'recording_started') {
       console.log('기록 시작됨:', lastMessage.recordingId);
@@ -156,21 +161,28 @@ export default function MainPage() {
       pitch: currentData.pitch,
       roll: currentData.roll,
       yaw: currentData.yaw,
-      stage: determineStage(currentData.altitude),
+      // 리플레이 데이터의 flightPhase를 사용하여 stage 결정
+      stage: flightPhaseToStageMap[currentData.flightPhase] || 'pre-launch',
       temperature: currentData.temperature,
       pressure: currentData.pressure,
       battery: currentData.battery,
+      humidity: currentData.humidity,
+      parachuteStatus: currentData.parachuteStatus,
+      flightPhase: currentData.flightPhase,
     });
   }, [isReplayMode, replayTime, replayData]);
 
-  const determineStage = (altitude: number): RocketTelemetry['stage'] => {
-    if (altitude === 0) return 'pre-launch';
-    if (altitude > 10000) return 'descent';
-    if (altitude > 5000) return 'coasting';
-    if (altitude > 100) return 'ascent';
-    if (altitude > 0) return 'launch';
-    return 'landed';
-  };
+  // 이전 determineStage 함수는 더 이상 사용되지 않습니다. (서버의 flightPhase를 사용)
+  // const determineStage = (altitude: number): RocketTelemetry['stage'] => {
+  //   if (altitude <= 0.1 && speed <= 0.1) return 'landed';
+  //   if (altitude > 0.1 && speed > 0.1) {
+  //     if (altitude <= 100) return 'launch';
+  //     if (altitude <= 2000 && speed < 50) return 'parachute_deployment';
+  //     if (altitude <= 5000) return 'ascent';
+  //     if (altitude > 5000) return 'descent';
+  //   }
+  //   return 'pre-launch'; // Fallback
+  // };
 
   const handleStartRecording = () => {
     setIsRecording(true);
@@ -207,6 +219,9 @@ export default function MainPage() {
       temperature: 22,
       pressure: 1013,
       battery: 100,
+      humidity: 0,
+      parachuteStatus: 0,
+      flightPhase: 0,
     });
   };
 
