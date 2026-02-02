@@ -1,14 +1,10 @@
-// 아두이노 예제 코드
-// 센서 데이터를 효율적인 바이너리 패킷으로 시리얼 통신을 통해 전송합니다.
 
-// 데이터 패킷 구조체 정의
-// __attribute__((packed))는 컴파일러가 임의로 패딩을 추가하지 못하게 하여
-// 송/수신간의 데이터 크기를 정확히 일치시킵니다.
+
 struct __attribute__((packed)) FlightDataPacket {
   // 시작을 알리는 Sync Byte (1 byte)
   const uint8_t start_byte = 0xAA;
 
-  // 데이터 필드 (34 bytes)
+  // 데이터 필드 (42 bytes)
   float roll;
   float pitch;
   float yaw;
@@ -17,12 +13,14 @@ struct __attribute__((packed)) FlightDataPacket {
   float alt;
   float temp;
   float hum;
+  float speed;
+  float pressure;
   uint8_t para;  // 0 or 1
   uint8_t phase; // FlightState enum 값
 
   // 간단한 체크섬 (모든 데이터 바이트를 더한 값) (1 byte)
   uint8_t checksum;
-}; // 총 36 바이트
+}; // 총 44 바이트
 
 // 패킷 생성 및 전송
 void sendData() {
@@ -39,6 +37,8 @@ void sendData() {
   packet.hum = random(2000, 8000) / 100.0;
   packet.para = random(0, 2);   // 0 or 1
   packet.phase = random(0, 7);  // 0 to 6 (FlightState)
+  packet.pressure = random(500, 1000);   
+  packet.speed = random(0, 100); 
 
   // 체크섬 계산
   packet.checksum = 0;

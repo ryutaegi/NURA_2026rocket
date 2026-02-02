@@ -27,7 +27,7 @@ export interface RocketTelemetry {
 }
 
 // 아두이노 FlightState enum에 따른 매핑
-const flightPhaseToStageMap: { [key: number]: RocketTelemetry['stage'] } = {
+export const flightPhaseToStageMap: { [key: number]: RocketTelemetry['stage'] } = {
   0: 'pre-launch',    // STANDBY
   1: 'launch',        // LAUNCHED
   2: 'powered',       // POWERED
@@ -187,18 +187,33 @@ export default function MainPage() {
   const handleStartRecording = () => {
     setIsRecording(true);
     recordingStartTime.current = Date.now();
+    
+    // 현재 위치를 발사 장소로 설정
+    const launchSiteString = `${telemetry.latitude.toFixed(6)}, ${telemetry.longitude.toFixed(6)}`;
+
     sendMessage({
       type: 'start_recording',
       data: {
-        launchSite: '나로우주센터',
+        launchSite: launchSiteString,
       },
     });
   };
 
   const handleStopRecording = () => {
+    // 1. 사용자에게 발사 기록의 이름을 입력받습니다.
+    const launchName = prompt("발사 기록의 이름을 입력하세요:", `발사 ${new Date().toLocaleString('ko-KR')}`);
+
+    // 2. 사용자가 입력을 취소한 경우 (null 반환) 아무 작업도 하지 않습니다.
+    if (launchName === null) {
+      return;
+    }
+
     setIsRecording(false);
     sendMessage({
       type: 'stop_recording',
+      data: {
+        name: launchName, // 3. 입력받은 이름을 데이터에 담아 전송합니다.
+      },
     });
   };
 

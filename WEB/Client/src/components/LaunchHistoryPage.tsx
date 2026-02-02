@@ -5,6 +5,7 @@ import { useWebSocket } from '../hooks/useWebSocket';
 
 interface LaunchRecord {
   id: string;
+  name: string; // "name" 필드 추가
   date: Date;
   maxAltitude: number;
   maxSpeed: number;
@@ -174,7 +175,7 @@ export default function LaunchHistoryPage() {
                     <div className="flex items-center gap-3">
                       <div className={`w-3 h-3 rounded-full ${getStatusColor(launch.status)}`} />
                       <div>
-                        <div className="text-white">발사 #{launch.id.slice(0, 8)}</div>
+                        <div className="text-white">{launch.name || `발사 #${launch.id.slice(0, 8)}`}</div>
                         <div className="text-xs text-gray-400 flex items-center gap-3 mt-1">
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
@@ -221,7 +222,7 @@ export default function LaunchHistoryPage() {
                       <div className="text-purple-400">{launch.maxSpeed.toFixed(1)} m/s</div>
                     </div>
                     <div>
-                      <div className="text-gray-400 text-xs mb-1">비행 시간</div>
+                      <div className="text-gray-400 text-xs mb-1">녹화 시간</div>
                       <div className="text-green-400">{launch.duration.toFixed(0)}초</div>
                     </div>
                     <div>

@@ -2,6 +2,8 @@
 // 실행 방법: node server.js
 // 필요한 패키지: npm install express ws serialport
 
+require('dotenv').config(); // .env 파일 로드를 위해 추가
+const axios = require('axios'); // HTTP 요청을 위해 추가
 const express = require('express');
 const WebSocket = require('ws');
 const { SerialPort } = require('serialport');
@@ -87,48 +89,54 @@ try {
 
   // 아두이노에서 바이너리 데이터 수신
   serialPort.on('data', (buffer) => {
-    // 패킷의 시작 바이트(0xAA)와 크기(36바이트)를 확인합니다.
-    if (buffer[0] !== 0xAA || buffer.length !== 36) {
-      // console.error('잘못된 패킷 수신. 길이:', buffer.length);
+    // 패킷의 시작 바이트(0xAA)와 기대하는 크기(44바이트)를 확인합니다.
+    const EXPECTED_PACKET_LEN = 44; // 44바이트로 변경
+    if (buffer[0] !== 0xAA || buffer.length !== EXPECTED_PACKET_LEN) {
+      // console.error(`잘못된 패킷 수신. 기대: ${EXPECTED_PACKET_LEN}바이트, 실제: ${buffer.length}바이트, 시작바이트: 0x${buffer[0] ? buffer[0].toString(16) : ''}`);
       return;
     }
     
     try {
       // 체크섬 검증
       let checksum = 0;
-      // start_byte는 제외하고 checksum 필드 전까지 더합니다.
-      for (let i = 1; i < buffer.length - 1; i++) {
+      // start_byte는 제외하고 checksum 필드 전까지 더합니다. (패킷 구조체 크기 - 1 = checksum 필드 인덱스)
+      for (let i = 1; i < EXPECTED_PACKET_LEN - 1; i++) {
         checksum = (checksum + buffer[i]) & 0xFF; // 8비트 초과 방지
       }
 
-      if (checksum !== buffer[buffer.length - 1]) {
-        console.error('체크섬 오류');
+      if (checksum !== buffer[EXPECTED_PACKET_LEN - 1]) {
+        console.error(`체크섬 오류. 계산됨: 0x${checksum.toString(16)}, 수신됨: 0x${buffer[EXPECTED_PACKET_LEN - 1].toString(16)}`);
         return;
       }
       
       // Buffer에서 데이터를 읽어 프론트엔드가 기대하는 형식의 객체를 생성합니다.
+      // FlightDataPacket 구조체 (44바이트)에 맞게 파싱합니다.
       const telemetryData = {
         timestamp: Date.now(),
         
-        // 필드 이름 변경 (e.g. roll -> roll)
-        roll: buffer.readFloatLE(1),
-        pitch: buffer.readFloatLE(5),
-        yaw: buffer.readFloatLE(9),
-        latitude: buffer.readFloatLE(13),   // lat -> latitude
-        longitude: buffer.readFloatLE(17),  // lon -> longitude
-        altitude: buffer.readFloatLE(21),   // alt -> altitude
-        temperature: buffer.readFloatLE(25),// temp -> temperature
-        humidity: buffer.readFloatLE(29),   // hum -> humidity
+        roll: buffer.readFloatLE(1),  // float (4 bytes) - offset 1
+        pitch: buffer.readFloatLE(5), // float (4 bytes) - offset 5
+        yaw: buffer.readFloatLE(9),   // float (4 bytes) - offset 9
+        latitude: buffer.readFloatLE(13), // float (4 bytes) - offset 13
+        longitude: buffer.readFloatLE(17),// float (4 bytes) - offset 17
+        altitude: buffer.readFloatLE(21), // float (4 bytes) - offset 21
+        temperature: buffer.readFloatLE(25),// float (4 bytes) - offset 25
+        humidity: buffer.readFloatLE(29),   // float (4 bytes) - offset 29
 
-        // 타입 변경 및 이름 변경
-        parachuteStatus: buffer.readUInt8(33), // para -> parachuteStatus
-        flightPhase: buffer.readUInt8(34),     // phase -> flightPhase
+        // 새롭게 추가된 필드의 오프셋 조정
+        speed: buffer.readFloatLE(33), // float (4 bytes) - offset 33 (humidity 다음)
+        pressure: buffer.readFloatLE(37),// float (4 bytes) - offset 37 (speed 다음)
 
-        // 아두이노에서 보내지 않지만 프론트엔드가 기대하는 값 (기본값)
-        speed: Math.random() * 150, // 랜덤값으로 채워 시뮬레이션 데이터와 유사하게 만듭니다.
-        pressure: 1013.25 + (Math.random() - 0.5) * 20, // 랜덤값으로 채워 시뮬레이션 데이터와 유사하게 만듭니다.
-        battery: 100 - Math.random() * 10, // 랜덤값으로 채워 시뮬레이션 데이터와 유사하게 만듭니다.
+        parachuteStatus: buffer.readUInt8(41), // uint8_t (1 byte) - offset 41 (pressure 다음)
+        flightPhase: buffer.readUInt8(42),     // uint8_t (1 byte) - offset 42 (parachuteStatus 다음)
+
+        battery: 0, // 아두이노에서 배터리 정보를 직접 전송하도록 변경 필요 (현재는 0)
       };
+
+      // speed와 pressure는 이제 아두이노에서 오므로 시뮬레이션 로직 제거.
+      // battery는 아직 아두이노에서 오지 않으므로 시뮬레이션 유지
+      telemetryData.battery = telemetryData.battery || (100 - Math.random() * 10);
+
 
       broadcastData(telemetryData);
 
@@ -149,18 +157,47 @@ try {
 wss.on('connection', (ws) => {
   console.log('새 클라이언트 연결됨');
 
-  ws.on('message', (message) => {
+  ws.on('message', async (message) => { // 메시지 핸들러를 async로 변경
     try {
       const msg = JSON.parse(message);
 
       // 기록 시작
       if (msg.type === 'start_recording') {
+        let humanReadableAddress = '알 수 없음';
+        const latLngString = msg.data.launchSite; // "latitude, longitude" 형식의 문자열
+        console.log('리버스 지오코딩 요청 좌표:', latLngString); // 요청 좌표 로깅
+
+        if (latLngString && process.env.GOOGLE_MAPS_API_KEY) {
+          try {
+            const response = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json`, {
+              params: {
+                latlng: latLngString,
+                key: process.env.GOOGLE_MAPS_API_KEY,
+                language: 'ko' // 결과를 한국어로 받기
+              }
+            });
+            console.log('Google Geocoding API 응답:', JSON.stringify(response.data, null, 2)); // API 응답 전체 로깅
+            
+            if (response.data.results && response.data.results.length > 0) {
+              humanReadableAddress = response.data.results[0].formatted_address;
+            } else {
+              console.warn('Google Geocoding API: 주소를 찾을 수 없습니다.');
+              humanReadableAddress = latLngString; // 주소를 찾지 못하면 좌표로 대체
+            }
+          } catch (error) {
+            console.error('리버스 지오코딩 API 호출 중 에러 발생:', error.message);
+            humanReadableAddress = latLngString; // 에러 발생 시 좌표로 대체
+          }
+        } else {
+            humanReadableAddress = latLngString || '알 수 없음'; // API 키 없거나 좌표 없으면 기본값
+        }
+
         isRecording = true;
         recordedData = [];
         currentRecording = {
           id: Date.now().toString(),
           startTime: Date.now(),
-          launchSite: msg.launchSite || '나로우주센터',
+          launchSite: humanReadableAddress, // 리버스 지오코딩된 주소 저장
         };
         
         ws.send(JSON.stringify({
@@ -168,18 +205,20 @@ wss.on('connection', (ws) => {
           recordingId: currentRecording.id,
         }));
         
-        console.log('기록 시작:', currentRecording.id);
+        console.log('기록 시작:', currentRecording.id, '장소:', humanReadableAddress);
       }
 
       // 기록 중지 및 저장
       if (msg.type === 'stop_recording') {
         if (isRecording && currentRecording) {
           isRecording = false;
-          
+          const msgData = msg.data || {}; // 메시지에 data 객체가 없을 경우를 대비
+
           const launchRecord = {
             id: currentRecording.id,
+            name: msgData.name || `발사 #${currentRecording.id}`, // 요청: 메시지에서 이름(name)을 받아 추가
             date: new Date(currentRecording.startTime).toISOString(),
-            launchSite: currentRecording.launchSite,
+            launchSite: currentRecording.launchSite, // 'start_recording' 시점에 저장된 위치
             duration: (Date.now() - currentRecording.startTime) / 1000,
             telemetryData: recordedData,
             maxAltitude: Math.max(...recordedData.map(d => d.altitude)),
@@ -222,6 +261,7 @@ wss.on('connection', (ws) => {
               const data = JSON.parse(fs.readFileSync(path.join(dataDir, f), 'utf-8'));
               return {
                 id: data.id,
+                name: data.name, // "name" 필드 추가
                 date: data.date,
                 maxAltitude: data.maxAltitude,
                 maxSpeed: data.maxSpeed,
