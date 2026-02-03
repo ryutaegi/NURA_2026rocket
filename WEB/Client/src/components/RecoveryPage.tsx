@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, Trash2, Save, Rocket } from 'lucide-react';
+import { MapPin, Trash2, Save, Rocket, Download, Upload } from 'lucide-react';
+import { toast } from "sonner";
 import { useWebSocket } from '../hooks/useWebSocket';
 import { RocketTelemetry, flightPhaseToStageMap } from './MainPage'; // MainPage에서 타입과 맵을 가져옵니다.
 
@@ -30,6 +31,30 @@ export default function RecoveryPage() {
   const { lastMessage } = useWebSocket();
   const [liveTelemetry, setLiveTelemetry] = useState<RocketTelemetry | null>(null);
   const liveRocketMarkerRef = useRef<google.maps.Marker | null>(null);
+
+  // 마커 파일 저장/불러오기 관련 상태
+  const [savedFiles, setSavedFiles] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<string>('');
+
+  const fetchSavedFiles = async () => {
+    try {
+      // API 경로 수정: http://localhost:3001
+      const response = await fetch('http://localhost:3001/api/recovery-markers');
+      if (!response.ok) throw new Error('서버에서 파일 목록을 가져오는 데 실패했습니다.');
+      const files = await response.json();
+      setSavedFiles(files);
+      if (files.length > 0) {
+        setSelectedFile(files[0]);
+      }
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  useEffect(() => {
+    fetchSavedFiles();
+  }, []);
 
   // Google Maps 스크립트 로드
   useEffect(() => {
@@ -185,6 +210,85 @@ export default function RecoveryPage() {
     }
   };
 
+  const handleSaveMarkers = async () => {
+    if (markers.length === 0) {
+      toast.error("저장할 마커가 없습니다.");
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const response = await fetch('http://localhost:3001/api/recovery-markers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markers }),
+      });
+      if (!response.ok) throw new Error('마커 저장에 실패했습니다.');
+      const result = await response.json();
+      toast.success(`마커가 ${result.filename}으로 저장되었습니다.`);
+      setMarkers([]); // 현재 마커 지우기
+      setSelectedMarker(null); // 선택된 마커 초기화
+      await fetchSavedFiles(); // 파일 목록 새로고침
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLoadMarkers = async () => {
+    if (!selectedFile) {
+      toast.error("불러올 파일을 선택하세요.");
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const response = await fetch(`http://localhost:3001/api/recovery-markers/${selectedFile}`);
+      if (!response.ok) throw new Error('마커 불러오기에 실패했습니다.');
+      const loadedMarkers = await response.json();
+      
+      // JSON으로 직렬화된 timestamp를 다시 Date 객체로 변환
+      const markersWithDate = loadedMarkers.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }));
+
+      setMarkers(markersWithDate);
+      setSelectedMarker(null);
+      toast.success(`${selectedFile}에서 마커를 불러왔습니다.`);
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteFile = async () => {
+    if (!selectedFile) {
+      toast.error("삭제할 파일을 선택하세요.");
+      return;
+    }
+
+    if (!window.confirm(`정말로 '${selectedFile}' 파일을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(`http://localhost:3001/api/recovery-markers/${selectedFile}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('파일 삭제에 실패했습니다.');
+      
+      toast.success(`'${selectedFile}' 파일이 삭제되었습니다.`);
+      
+      setMarkers([]); // 현재 마커 지우기
+      setSelectedMarker(null);
+      await fetchSavedFiles(); // 파일 목록 새로고침
+
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="h-[calc(100vh-4rem)] p-4">
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 h-full">
@@ -210,11 +314,57 @@ export default function RecoveryPage() {
             </div>
           </div>
         </div>
-        <div className="bg-gray-900 rounded-lg p-4 flex flex-col">
-          <h2 className="text-white mb-4 flex items-center gap-2"><MapPin className="w-5 h-5" />회수 지점 목록</h2>
-          <div className="flex-1 overflow-y-auto space-y-2 mb-4">
+        <div className="bg-gray-900 rounded-lg p-4 flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-white flex items-center gap-2"><MapPin className="w-5 h-5" />회수 지점 목록</h2>
+          </div>
+          
+          <div className="bg-gray-800 rounded-lg p-3 mb-4">
+            <div className="grid grid-cols-1 gap-2">
+              <select
+                value={selectedFile}
+                onChange={(e) => setSelectedFile(e.target.value)}
+                className="w-full bg-gray-900 text-white text-sm rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
+                disabled={isLoading || savedFiles.length === 0}
+              >
+                {savedFiles.length === 0 ? (
+                  <option value="">저장된 파일 없음</option>
+                ) : (
+                  savedFiles.map(file => <option key={file} value={file}>{file}</option>)
+                )}
+              </select>
+              <div className="mt-2 grid grid-cols-1 gap-2"> {/* Reverted to grid-cols-1 for vertical stacking */}
+                <button 
+                  onClick={handleLoadMarkers}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded transition-colors flex items-center justify-center gap-2 disabled:bg-gray-600"
+                  disabled={isLoading || !selectedFile}
+                >
+                  <Download className="w-4 h-4" />
+                  불러오기
+                </button>
+                <button 
+                  onClick={handleDeleteFile}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-2 rounded transition-colors flex items-center justify-center gap-2 disabled:bg-gray-600"
+                  disabled={isLoading || !selectedFile}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  삭제
+                </button>
+                <button 
+                  onClick={handleSaveMarkers}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded transition-colors flex items-center justify-center gap-2 disabled:bg-gray-600"
+                  disabled={isLoading || markers.length === 0}
+                >
+                  <Upload className="w-4 h-4" />
+                  저장
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-1 space-y-2 mb-4 overflow-y-auto min-h-0">
             {markers.length === 0 ? (
-              <div className="text-gray-500 text-sm text-center py-8">지도를 클릭하여<br />마커를 추가하세요</div>
+              <div className="text-gray-500 text-sm text-center py-8">지도를 클릭하여 마커를 추가하거나<br/>저장된 마커를 불러오세요.</div>
             ) : (
               markers.map((marker, index) => (
                 <div key={marker.id} className={`bg-gray-800 rounded-lg p-3 cursor-pointer transition-all ${selectedMarker?.id === marker.id ? 'ring-2 ring-blue-500' : 'hover:bg-gray-750'}`} onClick={() => setSelectedMarker(marker)}>
@@ -228,7 +378,7 @@ export default function RecoveryPage() {
                   <div className="text-xs text-gray-400 space-y-1">
                     <div>위도: {marker.latitude.toFixed(6)}°</div>
                     <div>경도: {marker.longitude.toFixed(6)}°</div>
-                    <div>시간: {marker.timestamp.toLocaleTimeString()}</div>
+                    <div>시간: {new Date(marker.timestamp).toLocaleTimeString()}</div>
                   </div>
                   {marker.notes && <div className="mt-2 text-xs text-gray-300 bg-gray-900 rounded p-2">{marker.notes}</div>}
                 </div>
@@ -239,7 +389,7 @@ export default function RecoveryPage() {
             <div className="bg-gray-800 rounded-lg p-4 border-t border-gray-700">
               <h3 className="text-white text-sm mb-2">메모</h3>
               <textarea value={selectedMarker.notes} onChange={(e) => updateMarkerNotes(selectedMarker.id, e.target.value)} placeholder="회수 지점에 대한 메모를 입력하세요..." className="w-full bg-gray-900 text-white text-sm rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none resize-none" rows={3}/>
-              <button className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded transition-colors flex items-center justify-center gap-2"><Save className="w-4 h-4" />저장</button>
+              <button onClick={() => { updateMarkerNotes(selectedMarker.id, selectedMarker.notes); setSelectedMarker(null); }} className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded transition-colors flex items-center justify-center gap-2"><Save className="w-4 h-4" />저장</button>
             </div>
           )}
         </div>

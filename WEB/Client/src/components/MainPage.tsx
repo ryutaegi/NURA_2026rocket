@@ -247,7 +247,7 @@ export default function MainPage() {
         <div className="bg-red-600 text-white px-4 py-2 rounded-lg mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Circle className="h-3 w-3" fill="currentColor" />
-            <span>백엔드 서버 연결 안됨 (localhost:3001)</span>
+            <span>시리얼 서버 연결 안됨 (localhost:3001)</span>
           </div>
         </div>
       )}
@@ -255,7 +255,7 @@ export default function MainPage() {
          <div className="bg-green-600 text-white px-4 py-2 rounded-lg mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Circle className="h-3 w-3 animate-pulse" fill="currentColor" />
-            <span>백엔드 서버 연결됨</span>
+            <span>시리얼 서버 연결됨</span>
           </div>
         </div>
       )}

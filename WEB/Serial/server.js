@@ -5,6 +5,7 @@
 require('dotenv').config(); // .env 파일 로드를 위해 추가
 const axios = require('axios'); // HTTP 요청을 위해 추가
 const express = require('express');
+const cors = require('cors'); // CORS 미들웨어 추가
 const WebSocket = require('ws');
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
@@ -12,6 +13,11 @@ const fs = require('fs');
 const path = require('path');
 
 const app = express();
+app.use(cors()); // CORS 미들웨어 적용
+app.use(express.json()); // JSON 요청 본문을 파싱하기 위해 추가
+
+// 다운로드를 위해 launch_data 디렉토리를 정적 파일로 제공
+app.use('/launch-data', express.static(path.join(__dirname, 'launch_data')));
 const PORT = 3001;
 
 // Express 서버 시작
@@ -19,7 +25,105 @@ const server = app.listen(PORT, () => {
   console.log(`서버가 포트 ${PORT}에서 실행 중입니다.`);
 });
 
-// WebSocket 서버 설정
+// --- 복구 마커 API 엔드포인트 ---
+
+// 저장된 복구 마커 파일 목록 가져오기
+app.get('/api/recovery-markers', (req, res) => {
+  const dataDir = path.join(__dirname, 'recovery_data');
+  if (!fs.existsSync(dataDir)) {
+    return res.json([]);
+  }
+  fs.readdir(dataDir, (err, files) => {
+    if (err) {
+      console.error("디렉토리 읽기 에러:", err);
+      return res.status(500).json({ message: "서버에서 디렉토리를 읽는 중 오류가 발생했습니다." });
+    }
+    const jsonFiles = files
+      .filter(f => f.endsWith('.json'))
+      .sort((a, b) => b.localeCompare(a)); // 최신 파일이 위로 오도록 정렬
+    res.json(jsonFiles);
+  });
+});
+
+// 새 복구 마커 세트 저장하기
+app.post('/api/recovery-markers', (req, res) => {
+  const markers = req.body.markers;
+  if (!markers || !Array.isArray(markers)) {
+    return res.status(400).json({ message: "잘못된 마커 데이터 형식입니다." });
+  }
+  
+  const dataDir = path.join(__dirname, 'recovery_data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir);
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `recovery-markers-${timestamp}.json`;
+  const filePath = path.join(dataDir, filename);
+
+  fs.writeFile(filePath, JSON.stringify(markers, null, 2), (err) => {
+    if (err) {
+      console.error("파일 쓰기 에러:", err);
+      return res.status(500).json({ message: "서버에서 파일을 저장하는 중 오류가 발생했습니다." });
+    }
+    res.status(201).json({ message: "마커가 성공적으로 저장되었습니다.", filename });
+  });
+});
+
+// 특정 복구 마커 파일 내용 가져오기
+app.get('/api/recovery-markers/:filename', (req, res) => {
+  const { filename } = req.params;
+  const dataDir = path.join(__dirname, 'recovery_data');
+  const filePath = path.join(dataDir, filename);
+
+  // 경로 조작 공격 방지
+  if (path.dirname(filePath) !== dataDir) {
+    return res.status(400).json({ message: "잘못된 파일 경로입니다." });
+  }
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ message: "파일을 찾을 수 없습니다." });
+  }
+
+  fs.readFile(filePath, 'utf8', (err, data) => {
+    if (err) {
+      console.error("파일 읽기 에러:", err);
+      return res.status(500).json({ message: "서버에서 파일을 읽는 중 오류가 발생했습니다." });
+    }
+    res.json(JSON.parse(data));
+  });
+});
+
+// 특정 복구 마커 파일 삭제하기
+app.delete('/api/recovery-markers/:filename', (req, res) => {
+  const { filename } = req.params;
+
+  const dataDir = path.join(__dirname, 'recovery_data');
+  const filePath = path.join(dataDir, filename);
+  console.log(`[DELETE] 확인 경로: ${filePath}`);
+  
+  // 경로 조작 공격 방지
+  if (path.dirname(filePath) !== dataDir) {
+    console.error(`[DELETE] 경로 조작 시도 감지됨: ${filename}`);
+    return res.status(400).json({ message: "잘못된 파일 경로입니다." });
+  }
+
+  if (!fs.existsSync(filePath)) {
+    console.error(`[DELETE] 파일을 찾을 수 없음: ${filePath}`);
+    return res.status(404).json({ message: "파일을 찾을 수 없습니다." });
+  }
+
+  fs.unlink(filePath, (err) => {
+    if (err) {
+      console.error("파일 삭제 에러:", err);
+      return res.status(500).json({ message: "서버에서 파일을 삭제하는 중 오류가 발생했습니다." });
+    }
+    console.log(`[DELETE] 파일 삭제 성공: ${filename}`);
+    res.status(200).json({ message: "파일이 성공적으로 삭제되었습니다." });
+  });
+});
+
+// --- WebSocket 서버 설정 ---
 const wss = new WebSocket.Server({ server });
 
 // 현재 기록 중인 데이터
@@ -291,6 +395,78 @@ wss.on('connection', (ws) => {
             type: 'recording_data',
             record: data,
           }));
+        }
+      }
+
+      // 발사 기록 삭제 요청
+      if (msg.type === 'delete_recording') {
+        const { recordingId } = msg;
+        // 간단한 경로 조작 방지
+        if (!recordingId || String(recordingId).includes('..') || String(recordingId).includes('/')) {
+          console.error('잘못된 recordingId:', recordingId);
+          return ws.send(JSON.stringify({ type: 'error', message: '잘못된 기록 ID입니다.' }));
+        }
+
+        const dataDir = path.join(__dirname, 'launch_data');
+        const filePath = path.join(dataDir, `launch_${recordingId}.json`);
+
+        if (fs.existsSync(filePath)) {
+          fs.unlink(filePath, (err) => {
+            if (err) {
+              console.error('파일 삭제 에러:', err);
+              ws.send(JSON.stringify({ type: 'error', message: '파일 삭제 중 오류가 발생했습니다.' }));
+            } else {
+              console.log('파일 삭제 성공:', filePath);
+              ws.send(JSON.stringify({ type: 'recording_deleted', recordingId }));
+            }
+          });
+        } else {
+          console.warn('삭제할 파일을 찾을 수 없음:', filePath);
+          ws.send(JSON.stringify({ type: 'error', message: '삭제할 파일을 찾을 수 없습니다.' }));
+        }
+      }
+
+      // 발사 기록 상태 업데이트 요청
+      if (msg.type === 'update_launch_status') {
+        const { recordingId, newStatus } = msg;
+        if (!recordingId || String(recordingId).includes('..') || String(recordingId).includes('/')) {
+          console.error('잘못된 recordingId:', recordingId);
+          return ws.send(JSON.stringify({ type: 'error', message: '잘못된 기록 ID입니다.' }));
+        }
+        if (!['success', 'partial', 'failed'].includes(newStatus)) { // 'unknown'은 UI에서만 사용되므로 서버에서는 이 3가지만 처리
+          console.error('잘못된 상태 값:', newStatus);
+          return ws.send(JSON.stringify({ type: 'error', message: '잘못된 상태 값입니다.' }));
+        }
+
+        const dataDir = path.join(__dirname, 'launch_data');
+        const filePath = path.join(dataDir, `launch_${recordingId}.json`);
+
+        if (fs.existsSync(filePath)) {
+          fs.readFile(filePath, 'utf8', (err, data) => {
+            if (err) {
+              console.error('파일 읽기 에러:', err);
+              return ws.send(JSON.stringify({ type: 'error', message: '파일 읽기 중 오류가 발생했습니다.' }));
+            }
+            try {
+              const launchRecord = JSON.parse(data);
+              launchRecord.status = newStatus;
+
+              fs.writeFile(filePath, JSON.stringify(launchRecord, null, 2), (err) => {
+                if (err) {
+                  console.error('파일 쓰기 에러:', err);
+                  return ws.send(JSON.stringify({ type: 'error', message: '파일 저장 중 오류가 발생했습니다.' }));
+                }
+                console.log(`기록 ${recordingId}의 상태가 ${newStatus}로 업데이트되었습니다.`);
+                ws.send(JSON.stringify({ type: 'launch_status_updated', recordingId, newStatus }));
+              });
+            } catch (parseError) {
+              console.error('JSON 파싱 에러:', parseError);
+              ws.send(JSON.stringify({ type: 'error', message: '파일 파싱 중 오류가 발생했습니다.' }));
+            }
+          });
+        } else {
+          console.warn('상태를 업데이트할 파일을 찾을 수 없음:', filePath);
+          ws.send(JSON.stringify({ type: 'error', message: '업데이트할 파일을 찾을 수 없습니다.' }));
         }
       }
     } catch (error) {
