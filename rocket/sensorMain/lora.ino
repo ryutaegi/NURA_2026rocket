@@ -92,7 +92,7 @@ void sendLoraFromFlight(const FlightData& f, bool parachuteDeployed, uint8_t hum
   push32_be(buf, idx, f.gps.longitudeE7);
 
   // alt: m * 10 -> uint16 (0.1m)
-  push16_be(buf, idx, clamp_u16(iround(f.baro.altitude * 10.0f)));
+  push16_be(buf, idx, clamp_u16(iround(f.baro.altitude * 100.0f)));
 
   // temp: C * 100 -> int16
   push16_be_i(buf, idx, clamp_i16(iround(f.baro.temperature * 100.0f)));
