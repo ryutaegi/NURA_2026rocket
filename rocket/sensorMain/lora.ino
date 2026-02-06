@@ -71,7 +71,7 @@ void initLora() {
 }
 
 // ======================= 핵심: FlightData -> LoRa 송신 =======================
-void sendLoraFromFlight(const FlightData& f, bool parachuteDeployed, uint8_t humidity = 0) {
+void sendLoraFromFlight(const FlightData& f, bool parachuteDeployed, uint8_t connect = 0) {
   static uint32_t lastMs = 0;
   uint32_t nowMs = millis();
   if (nowMs - lastMs < LORA_PERIOD_MS) return;
@@ -97,8 +97,8 @@ void sendLoraFromFlight(const FlightData& f, bool parachuteDeployed, uint8_t hum
   // temp: C * 100 -> int16
   push16_be_i(buf, idx, clamp_i16(iround(f.baro.temperature * 100.0f)));
 
-  // humidity 1byte (없으면 0)
-  buf[idx++] = humidity;
+  // connect 1byte 연결되면 0, 아니면 1
+  buf[idx++] = connect;
 
   // state + parachute
   buf[idx++] = packPhaseChute((uint8_t)f.state, parachuteDeployed);

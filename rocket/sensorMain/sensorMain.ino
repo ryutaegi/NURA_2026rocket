@@ -14,6 +14,8 @@
 
 File logFile;
 static const int SD_CS_PIN = 10;
+//커넥트핀 연결을 단 한번만 판단하게함
+bool pinDetached = false;  
 
 FlightData flight;
 // 1) BMP280
@@ -344,10 +346,9 @@ void loop() {
   // Serial.write(Serial2.read());
   // if(Serial.available())
   // Serial2.write(Serial.read());
-  sendLoraFromFlight(flight, g_parachuteDeployed, 0);
+  sendLoraFromFlight(flight, g_parachuteDeployed, pinDetached);
 
-//커넥트핀 연결을 단 한번만 판단하게함
-   static bool pinDetached = false;  
+
   if (!pinDetached) {
     pinDetached = isConnectOrDeteached(PIN_CONNECT_DETECT);
   }

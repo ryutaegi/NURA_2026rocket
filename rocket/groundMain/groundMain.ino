@@ -16,7 +16,7 @@ struct __attribute__((packed)) FlightDataPacket {
   float lon;
   float alt;
   float temp;
-  float hum;
+  float connect;
   float speed;
   float pressure;
   uint8_t para;  // 0 or 1
@@ -132,7 +132,7 @@ void loop() {
   // uint16_t alt_i = 
   // int16_t temp_i = 
 
-  // uint8_t hum   = raw[idx++];
+  // uint8_t connect   = raw[idx++];
   // uint8_t phase  = 
   // uint8_t para = 
 
@@ -158,7 +158,7 @@ void loop() {
   packet.alt = read16(raw, idx) / 100.0;
   packet.temp = read16(raw, idx) / 100.0;
 
-  packet.hum = raw[idx++];
+  packet.connect = raw[idx++];
   packet.phase = raw[idx] / 10;
   packet.para = raw[idx++] % 10;
   packet.pressure = random(500, 1000);   
@@ -183,7 +183,7 @@ void loop() {
   Serial.print(" LON=");  Serial.print(packet.lon, 7);
   Serial.print(" ALT=");  Serial.print(packet.alt);
   Serial.print(" TEMP="); Serial.print(packet.temp);
-  Serial.print(" HUM=");  Serial.print(packet.hum);
+  Serial.print(" CONNECT=");  Serial.print(packet.connect);
   Serial.print(" PARA="); Serial.print(packet.para);
   Serial.print(" PHASE=");Serial.println(packet.phase);
 
