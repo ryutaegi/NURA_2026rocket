@@ -133,10 +133,15 @@ let recordedData = [];
 
 // 시리얼 포트 설정 (아두이노 연결)
 // COM 포트는 환경에 맞게 수정 필요 (예: Windows - 'COM3', macOS/Linux - '/dev/tty.usbserial-XXXX')
-const SERIAL_PORT = 'COM3'; // 실제 포트로 변경하세요
+const SERIAL_PORT = '/dev/tty.usbmodem1101'; // 실제 포트로 변경하세요
 const BAUD_RATE = 115200; // 아두이노와 동일하게 설정
 
 let serialPort;
+
+let rxBuffer = Buffer.alloc(0);
+const EXPECTED_PACKET_LEN = 44;
+const SYNC_BYTE = 0xAA;
+
 
 // 시뮬레이션 데이터 생성 함수 (프론트엔드 형식에 맞춤)
 const createTestData = () => {
@@ -192,62 +197,72 @@ try {
   });
 
   // 아두이노에서 바이너리 데이터 수신
-  serialPort.on('data', (buffer) => {
-    // 패킷의 시작 바이트(0xAA)와 기대하는 크기(44바이트)를 확인합니다.
-    const EXPECTED_PACKET_LEN = 44; // 44바이트로 변경
-    if (buffer[0] !== 0xAA || buffer.length !== EXPECTED_PACKET_LEN) {
-      // console.error(`잘못된 패킷 수신. 기대: ${EXPECTED_PACKET_LEN}바이트, 실제: ${buffer.length}바이트, 시작바이트: 0x${buffer[0] ? buffer[0].toString(16) : ''}`);
-      return;
-    }
-    
-    try {
-      // 체크섬 검증
-      let checksum = 0;
-      // start_byte는 제외하고 checksum 필드 전까지 더합니다. (패킷 구조체 크기 - 1 = checksum 필드 인덱스)
-      for (let i = 1; i < EXPECTED_PACKET_LEN - 1; i++) {
-        checksum = (checksum + buffer[i]) & 0xFF; // 8비트 초과 방지
-      }
-
-      if (checksum !== buffer[EXPECTED_PACKET_LEN - 1]) {
-        console.error(`체크섬 오류. 계산됨: 0x${checksum.toString(16)}, 수신됨: 0x${buffer[EXPECTED_PACKET_LEN - 1].toString(16)}`);
+  serialPort.on('data', (chunk) => {
+    // 들어온 데이터를 누적
+    rxBuffer = Buffer.concat([rxBuffer, chunk]);
+  
+    // 패킷 단위로 처리
+    while (rxBuffer.length >= EXPECTED_PACKET_LEN) {
+      // sync byte 찾기
+      const syncIndex = rxBuffer.indexOf(SYNC_BYTE);
+      if (syncIndex < 0) {
+        // sync 못 찾으면 전부 버림
+        rxBuffer = Buffer.alloc(0);
         return;
       }
-      
-      // Buffer에서 데이터를 읽어 프론트엔드가 기대하는 형식의 객체를 생성합니다.
-      // FlightDataPacket 구조체 (44바이트)에 맞게 파싱합니다.
-      const telemetryData = {
-        timestamp: Date.now(),
-        
-        roll: buffer.readFloatLE(1),  // float (4 bytes) - offset 1
-        pitch: buffer.readFloatLE(5), // float (4 bytes) - offset 5
-        yaw: buffer.readFloatLE(9),   // float (4 bytes) - offset 9
-        latitude: buffer.readFloatLE(13), // float (4 bytes) - offset 13
-        longitude: buffer.readFloatLE(17),// float (4 bytes) - offset 17
-        altitude: buffer.readFloatLE(21), // float (4 bytes) - offset 21
-        temperature: buffer.readFloatLE(25),// float (4 bytes) - offset 25
-        humidity: buffer.readFloatLE(29),   // float (4 bytes) - offset 29
-
-        // 새롭게 추가된 필드의 오프셋 조정
-        speed: buffer.readFloatLE(33), // float (4 bytes) - offset 33 (humidity 다음)
-        pressure: buffer.readFloatLE(37),// float (4 bytes) - offset 37 (speed 다음)
-
-        parachuteStatus: buffer.readUInt8(41), // uint8_t (1 byte) - offset 41 (pressure 다음)
-        flightPhase: buffer.readUInt8(42),     // uint8_t (1 byte) - offset 42 (parachuteStatus 다음)
-
-        battery: 0, // 아두이노에서 배터리 정보를 직접 전송하도록 변경 필요 (현재는 0)
-      };
-
-      // speed와 pressure는 이제 아두이노에서 오므로 시뮬레이션 로직 제거.
-      // battery는 아직 아두이노에서 오지 않으므로 시뮬레이션 유지
-      telemetryData.battery = telemetryData.battery || (100 - Math.random() * 10);
-
-
-      broadcastData(telemetryData);
-
-    } catch (error) {
-      console.error('데이터 파싱 에러:', error.message);
+  
+      // sync 앞의 쓰레기 데이터 제거
+      if (syncIndex > 0) {
+        rxBuffer = rxBuffer.slice(syncIndex);
+      }
+  
+      // 아직 패킷 하나 분량 안 되면 대기
+      if (rxBuffer.length < EXPECTED_PACKET_LEN) {
+        return;
+      }
+  
+      // 패킷 하나 추출
+      const packet = rxBuffer.slice(0, EXPECTED_PACKET_LEN);
+      rxBuffer = rxBuffer.slice(EXPECTED_PACKET_LEN);
+  
+      // 체크섬 검증
+      let checksum = 0;
+      for (let i = 1; i < EXPECTED_PACKET_LEN - 1; i++) {
+        checksum = (checksum + packet[i]) & 0xFF;
+      }
+  
+      if (checksum !== packet[EXPECTED_PACKET_LEN - 1]) {
+        console.error("체크섬 오류, 패킷 버림");
+        continue; // 다음 패킷 탐색
+      }
+  
+      try {
+        const telemetryData = {
+          timestamp: Date.now(),
+  
+          roll: packet.readFloatLE(1),
+          pitch: packet.readFloatLE(5),
+          yaw: packet.readFloatLE(9),
+          latitude: packet.readFloatLE(13),
+          longitude: packet.readFloatLE(17),
+          altitude: packet.readFloatLE(21),
+          temperature: packet.readFloatLE(25),
+          humidity: packet.readFloatLE(29),
+          speed: packet.readFloatLE(33),
+          pressure: packet.readFloatLE(37),
+          parachuteStatus: packet.readUInt8(41),
+          flightPhase: packet.readUInt8(42),
+          battery: 100, // 임시
+        };
+  
+        broadcastData(telemetryData);
+  
+      } catch (e) {
+        console.error("패킷 파싱 에러:", e.message);
+      }
     }
   });
+  
 
 } catch (error) {
   console.error('시리얼 포트 초기화 실패:', error.message);

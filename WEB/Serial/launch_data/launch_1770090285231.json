@@ -264,7 +264,7 @@
   ],
   "maxAltitude": 959.3009310598554,
   "maxSpeed": 149.19303592647134,
-  "status": "failed",
+  "status": "success",
   "landingCoords": {
     "lat": 37.568414708387884,
     "lng": 126.97611008981708
