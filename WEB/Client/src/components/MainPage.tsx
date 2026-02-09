@@ -7,6 +7,7 @@ import RocketData from './RocketData';
 import ReplayControls from './ReplayControls';
 import { Activity, RotateCcw, Circle, Square } from 'lucide-react';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { Toaster, toast } from 'sonner';
 
 export interface RocketTelemetry {
   latitude: number;
@@ -240,8 +241,39 @@ export default function MainPage() {
     });
   };
 
+  const handleEmergencyEject = async () => {
+    if (window.confirm('정말로 비상 사출 명령을 보내시겠습니까?')) {
+      try {
+        const response = await fetch('/api/emergency-eject', { method: 'POST' });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.message || '알 수 없는 오류가 발생했습니다.');
+        }
+        toast.success(data.message ||'비상 사출 명령을 성공적으로 전송했습니다.');
+      } catch (error: any) {
+        toast.error(`명령 전송 실패: ${error.message}`);
+      }
+    }
+  };
+
+  const handleCenterAlign = async () => {
+    if (window.confirm('정말로 중앙 정렬 명령을 보내시겠습니까?')) {
+      try {
+        const response = await fetch('/api/center-align', { method: 'POST' });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.message || '알 수 없는 오류가 발생했습니다.');
+        }
+        toast.success(data.message || '중앙 정렬 명령을 성공적으로 전송했습니다.');
+      } catch (error: any) {
+        toast.error(`명령 전송 실패: ${error.message}`);
+      }
+    }
+  };
+
   return (
     <div className="h-[calc(100vh-4rem)] p-4 overflow-hidden flex flex-col">
+      <Toaster richColors position="top-center" />
       {/* 연결 상태 표시 */}
       {!isReplayMode && !isConnected && (
         <div className="bg-red-600 text-white px-4 py-2 rounded-lg mb-4 flex items-center justify-between">
@@ -332,6 +364,31 @@ export default function MainPage() {
             </div>
           )}
 
+          { !(isReplayMode || isRecording) && (
+          <div className="bg-gray-900 rounded-lg p-4">
+            <div className="flex gap-3">
+              <button
+                onClick={handleEmergencyEject}
+                disabled={!isConnected}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <Circle className="h-5 w-5" />
+                비상 사출
+              </button>
+
+              <button
+                onClick={handleCenterAlign}
+                disabled={!isConnected}
+                className="flex-1 bg-yellow-500 hover:bg-yellow-700 text-white px-4 py-3 rounded-lg transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <Circle className="h-5 w-5" />
+                중앙 정렬
+              </button>
+            </div>
+          </div>
+          )}
+
+
           {/* 제어 버튼 */}
           {!isReplayMode && (
             <div className="bg-gray-900 rounded-lg p-4">
@@ -355,6 +412,10 @@ export default function MainPage() {
               )}
             </div>
           )}
+
+          
+
+          
         </div>
       </div>
     </div>

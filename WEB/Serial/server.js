@@ -123,6 +123,43 @@ app.delete('/api/recovery-markers/:filename', (req, res) => {
   });
 });
 
+// --- 원격 제어 API 엔드포인트 ---
+
+// 비상 사출 명령
+app.post('/api/emergency-eject', (req, res) => {
+  if (serialPort && serialPort.isOpen) {
+    serialPort.write('EJECT\n', (err) => {
+      if (err) {
+        console.error('시리얼 쓰기 에러 (EJECT):', err.message);
+        return res.status(500).json({ message: '명령 전송에 실패했습니다.' });
+      }
+      console.log('비상 사출 명령 전송됨');
+      res.status(200).json({ message: '비상 사출 명령이 전송되었습니다.' });
+    });
+  } else {
+    console.warn('비상 사출 명령 실패: 시리얼 포트가 연결되지 않음');
+    res.status(503).json({ message: '지상국 수신기가 연결되지 않았습니다.' });
+  }
+});
+
+// 중앙 정렬 명령
+app.post('/api/center-align', (req, res) => {
+  if (serialPort && serialPort.isOpen) {
+    serialPort.write('CENTER\n', (err) => {
+      if (err) {
+        console.error('시리얼 쓰기 에러 (CENTER):', err.message);
+        return res.status(500).json({ message: '명령 전송에 실패했습니다.' });
+      }
+      console.log('중앙 정렬 명령 전송됨');
+      res.status(200).json({ message: '중앙 정렬 명령이 전송되었습니다.' });
+    });
+  } else {
+    console.warn('중앙 정렬 명령 실패: 시리얼 포트가 연결되지 않음');
+    res.status(503).json({ message: '지상국 수신기가 연결되지 않았습니다.' });
+  }
+});
+
+
 // --- WebSocket 서버 설정 ---
 const wss = new WebSocket.Server({ server });
 
