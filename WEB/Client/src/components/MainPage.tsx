@@ -368,21 +368,21 @@ export default function MainPage() {
           <div className="bg-gray-900 rounded-lg p-4">
             <div className="flex gap-3">
               <button
-                onClick={handleEmergencyEject}
-                disabled={!isConnected}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                <Circle className="h-5 w-5" />
-                비상 사출
-              </button>
-
-              <button
                 onClick={handleCenterAlign}
                 disabled={!isConnected}
                 className="flex-1 bg-yellow-500 hover:bg-yellow-700 text-white px-4 py-3 rounded-lg transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 <Circle className="h-5 w-5" />
                 중앙 정렬
+              </button>
+
+              <button
+                onClick={handleEmergencyEject}
+                disabled={!isConnected}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <Circle className="h-5 w-5" />
+                비상 사출
               </button>
             </div>
           </div>
