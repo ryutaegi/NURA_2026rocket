@@ -157,7 +157,7 @@ const createTestData = () => {
     temperature: 20 + Math.random() * 10,
     pressure: 1013 + (Math.random() - 0.5) * 20,
     battery: 100 - Math.random() * 100,
-    humidity: 50 + Math.random() * 30,
+    connect: Math.floor(Math.random() * 2),
     parachuteStatus: Math.floor(Math.random() * 2),
     flightPhase: Math.floor(Math.random() * 7),
   };
@@ -247,7 +247,7 @@ try {
           longitude: packet.readFloatLE(17),
           altitude: packet.readFloatLE(21),
           temperature: packet.readFloatLE(25),
-          humidity: packet.readFloatLE(29),
+          connect: packet.readFloatLE(29),
           speed: packet.readFloatLE(33),
           pressure: packet.readFloatLE(37),
           parachuteStatus: packet.readUInt8(41),

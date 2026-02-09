@@ -84,7 +84,7 @@ int32_t read32(const uint8_t* buf, int& idx) {
 void setup() {
   Serial.begin(115200);
   lora.begin(9600);
-  Serial.println("RX READY"); 
+  Serial.println("RX READY");
 }
 
 void loop() {

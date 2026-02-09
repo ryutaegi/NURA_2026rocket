@@ -8,6 +8,6 @@
 void initLora();
 
 // FlightData를 LoRa로 송신
-void sendLoraFromFlight(const FlightData& f, bool parachuteDeployed, uint8_t humidity = 0);
+void sendLoraFromFlight(const FlightData& f, bool parachuteDeployed, uint8_t connect= 0);
 
 #endif

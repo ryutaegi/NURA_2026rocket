@@ -1,5 +1,5 @@
 import { RocketTelemetry } from './MainPage';
-import { Gauge, Thermometer, Wind, Battery, MapPin, Droplet, Cloud } from 'lucide-react'; // Droplet, Cloud 아이콘 추가
+import { Gauge, Thermometer, Wind, Battery, MapPin, Droplet, Cloud, Contact2Icon, Pin } from 'lucide-react'; // Droplet, Cloud 아이콘 추가
 interface RocketDataProps {
   telemetry: RocketTelemetry;
 }
@@ -31,10 +31,10 @@ export default function RocketData({ telemetry }: RocketDataProps) {
       color: 'text-orange-400',
     },
     {
-      label: '습도',
-      value: `${telemetry.humidity.toFixed(1)} %`,
-      icon: Droplet, // Droplet 아이콘 사용
-      color: 'text-blue-400',
+      label: '커넥트핀',
+      value: telemetry.connect === 1 ? '해제됨' : '연결됨',
+      icon: Pin, // Droplet 아이콘 사용
+      color: telemetry.connect === 1 ? 'text-blue-400' : 'text-red-400',
     },
     {
       label: '낙하산',

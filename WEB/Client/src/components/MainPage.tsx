@@ -21,7 +21,7 @@ export interface RocketTelemetry {
   temperature: number;
   pressure: number;
   battery: number;
-  humidity: number; // 새로 추가
+  connect: number; // 새로 추가
   parachuteStatus: number; // 새로 추가 (0: 닫힘, 1: 열림)
   flightPhase: number; // 새로 추가 (0: STANDBY, 1: LAUNCHED, ...)
 }
@@ -54,7 +54,7 @@ export default function MainPage() {
     temperature: 22,
     pressure: 1013,
     battery: 100,
-    humidity: 0, // 초기값
+    connect: 0, // 초기값
     parachuteStatus: 0, // 초기값
     flightPhase: 0, // 초기값
   });
@@ -105,7 +105,7 @@ export default function MainPage() {
         temperature: data.temperature,
         pressure: data.pressure,
         battery: data.battery,
-        humidity: data.humidity, // 새로운 필드
+        connect: data.connect, // 새로운 필드
         parachuteStatus: data.parachuteStatus, // 새로운 필드
         flightPhase: data.flightPhase, // 새로운 필드
       });
@@ -166,7 +166,7 @@ export default function MainPage() {
       temperature: currentData.temperature,
       pressure: currentData.pressure,
       battery: currentData.battery,
-      humidity: currentData.humidity,
+      connect: currentData.connect,
       parachuteStatus: currentData.parachuteStatus,
       flightPhase: currentData.flightPhase,
     });
@@ -234,7 +234,7 @@ export default function MainPage() {
       temperature: 22,
       pressure: 1013,
       battery: 100,
-      humidity: 0,
+      connect: 0,
       parachuteStatus: 0,
       flightPhase: 0,
     });
