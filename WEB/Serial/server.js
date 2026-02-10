@@ -237,7 +237,6 @@ try {
   serialPort.on('data', (chunk) => {
     // 들어온 데이터를 누적
     rxBuffer = Buffer.concat([rxBuffer, chunk]);
-  
     // 패킷 단위로 처리
     while (rxBuffer.length >= EXPECTED_PACKET_LEN) {
       // sync byte 찾기

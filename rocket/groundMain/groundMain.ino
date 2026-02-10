@@ -80,16 +80,7 @@ int32_t read32(const uint8_t* buf, int& idx) {
   return v;
 }
 
-
-void setup() {
-  Serial.begin(115200);
-  lora.begin(9600);
-  Serial.println("RX READY"); 
-}
-
-void loop() {
-  FlightDataPacket packet;
-
+void handleLoraRx() { // 로켓으로부터의 텔레메트리 수신 함수
   if (!lora.available()) return;
 
   String line = lora.readStringUntil('\n');
@@ -118,7 +109,7 @@ void loop() {
     Serial.print("SYNC ERROR: ");
     Serial.println(raw[0], HEX);
     return;
-  }
+  }  
 
   int idx = 1;
 
@@ -132,7 +123,7 @@ void loop() {
   // uint16_t alt_i = 
   // int16_t temp_i = 
 
-  // uint8_t connect   = raw[idx++];
+  // uint8_t hum   = raw[idx++];
   // uint8_t phase  = 
   // uint8_t para = 
 
@@ -146,8 +137,7 @@ void loop() {
   // float alt  = alt_i / 10.0;
   // float temp = temp_i / 100.0;
 
-  
-
+  FlightDataPacket packet;
   
   packet.roll = read16(raw, idx) / 100.0;
   packet.pitch = read16(raw, idx) / 100.0;
@@ -155,10 +145,10 @@ void loop() {
 
   packet.lat = read32(raw, idx) / 1e7;
   packet.lon = read32(raw, idx) / 1e7;
-  packet.alt = read16(raw, idx) / 100.0;
+  packet.alt = read16(raw, idx) / 10.0;
   packet.temp = read16(raw, idx) / 100.0;
 
-  packet.connect = raw[idx++];
+  packet.connect= raw[idx++];
   packet.phase = raw[idx] / 10;
   packet.para = raw[idx++] % 10;
   packet.pressure = random(500, 1000);   
@@ -173,23 +163,65 @@ void loop() {
   }
 
   // 시리얼 포트로 패킷 전송
-  //Serial.write((uint8_t*)&packet, sizeof(packet));
+  Serial.write((uint8_t*)&packet, sizeof(packet));
 
 
-  Serial.print("ROLL=");  Serial.print(packet.roll);
-  Serial.print(" PITCH=");Serial.print(packet.pitch);
-  Serial.print(" YAW=");  Serial.print(packet.yaw);
-  Serial.print(" LAT=");  Serial.print(packet.lat, 7);
-  Serial.print(" LON=");  Serial.print(packet.lon, 7);
-  Serial.print(" ALT=");  Serial.print(packet.alt);
-  Serial.print(" TEMP="); Serial.print(packet.temp);
-  Serial.print(" CONNECT=");  Serial.print(packet.connect);
-  Serial.print(" PARA="); Serial.print(packet.para);
-  Serial.print(" PHASE=");Serial.println(packet.phase);
+  // Serial.print("ROLL=");  Serial.print(packet.roll);
+  // Serial.print(" PITCH=");Serial.print(packet.pitch);
+  // Serial.print(" YAW=");  Serial.print(packet.yaw);
+  // Serial.print(" LAT=");  Serial.print(packet.lat, 7);
+  // Serial.print(" LON=");  Serial.print(packet.lon, 7);
+  // Serial.print(" ALT=");  Serial.print(packet.alt);
+  // Serial.print(" TEMP="); Serial.print(packet.temp);
+  // Serial.print(" HUM=");  Serial.print(packet.hum);
+  // Serial.print(" PARA="); Serial.print(packet.para);
+  // Serial.print(" PHASE=");Serial.println(packet.phase);
 
   // if(Serial.available())
   // lora.write(Serial.read());
   // if(lora.available())
-  // Serial.write(lora.read());
-
+  // Serial.write(lora.read())
 }
+
+
+void handleWebCommand() { // 웹으로부터의 명령 처리 함수
+  if (!Serial.available()) return;
+
+  String cmd = Serial.readStringUntil('\n');
+  cmd.trim();
+
+  if (cmd == "EJECT") {
+    //digitalWrite(13, HIGH);
+    sendEmergencyDeploy();
+  }
+  else if(cmd == "CENTER") {
+    //digitalWrite(13, LOW);
+  }
+}
+
+void sendEmergencyDeploy() { // LoRa 비상 사출 송신 함수
+  const char* msg = "E";   // 1바이트(문자 1개) 커맨드
+
+  lora.print("AT+SEND=1,");
+  lora.print(strlen(msg));   // 1
+  lora.print(",");
+  lora.print(msg);
+  lora.print("\r\n");
+
+  Serial.println("[GS] EMERGENCY DEPLOY SENT (\"E\")");
+}
+
+
+void setup() {
+  Serial.begin(115200);
+  lora.begin(9600);
+  Serial.println("RX READY");
+  //pinMode(13, OUTPUT);
+}
+
+
+void loop() {
+  handleLoraRx();
+  handleWebCommand();
+  }
+
