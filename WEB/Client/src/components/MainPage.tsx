@@ -38,7 +38,12 @@ export const flightPhaseToStageMap: { [key: number]: RocketTelemetry['stage'] } 
   6: 'landed',        // LANDED
 };
 
-export default function MainPage() {
+interface MainPageProps {
+  centerAlign: boolean;
+  emergencyEjection: boolean;
+}
+
+export default function MainPage({ centerAlign, emergencyEjection }: MainPageProps) {
   const location = useLocation();
   const replayLaunch = (location.state as any)?.replayLaunch;
   const { isConnected, lastMessage, sendMessage } = useWebSocket();
@@ -242,7 +247,7 @@ export default function MainPage() {
   };
 
   const handleEmergencyEject = async () => {
-    if (window.confirm('정말로 비상 사출 명령을 보내시겠습니까?')) {
+    //if (window.confirm('정말로 비상 사출 명령을 보내시겠습니까?')) {
       try {
         const response = await fetch('/api/emergency-eject', { method: 'POST' });
         const data = await response.json();
@@ -253,11 +258,11 @@ export default function MainPage() {
       } catch (error: any) {
         toast.error(`명령 전송 실패: ${error.message}`);
       }
-    }
+    //}
   };
 
   const handleCenterAlign = async () => {
-    if (window.confirm('정말로 중앙 정렬 명령을 보내시겠습니까?')) {
+    //if (window.confirm('정말로 중앙 정렬 명령을 보내시겠습니까?')) {
       try {
         const response = await fetch('/api/center-align', { method: 'POST' });
         const data = await response.json();
@@ -268,7 +273,7 @@ export default function MainPage() {
       } catch (error: any) {
         toast.error(`명령 전송 실패: ${error.message}`);
       }
-    }
+    //}
   };
 
   return (
