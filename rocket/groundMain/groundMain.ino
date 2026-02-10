@@ -163,19 +163,19 @@ void handleLoraRx() { // 로켓으로부터의 텔레메트리 수신 함수
   }
 
   // 시리얼 포트로 패킷 전송
-  //Serial.write((uint8_t*)&packet, sizeof(packet));
+  Serial.write((uint8_t*)&packet, sizeof(packet));
 
 
-  Serial.print("ROLL=");  Serial.print(packet.roll);
-  Serial.print(" PITCH=");Serial.print(packet.pitch);
-  Serial.print(" YAW=");  Serial.print(packet.yaw);
-  Serial.print(" LAT=");  Serial.print(packet.lat, 7);
-  Serial.print(" LON=");  Serial.print(packet.lon, 7);
-  Serial.print(" ALT=");  Serial.print(packet.alt);
-  Serial.print(" TEMP="); Serial.print(packet.temp);
-  Serial.print(" CONNECT=");  Serial.print(packet.connect);
-  Serial.print(" PARA="); Serial.print(packet.para);
-  Serial.print(" PHASE=");Serial.println(packet.phase);
+  // Serial.print("ROLL=");  Serial.print(packet.roll);
+  // Serial.print(" PITCH=");Serial.print(packet.pitch);
+  // Serial.print(" YAW=");  Serial.print(packet.yaw);
+  // Serial.print(" LAT=");  Serial.print(packet.lat, 7);
+  // Serial.print(" LON=");  Serial.print(packet.lon, 7);
+  // Serial.print(" ALT=");  Serial.print(packet.alt);
+  // Serial.print(" TEMP="); Serial.print(packet.temp);
+  // Serial.print(" CONNECT=");  Serial.print(packet.connect);
+  // Serial.print(" PARA="); Serial.print(packet.para);
+  // Serial.print(" PHASE=");Serial.println(packet.phase);
 
   // if(Serial.available())
   // lora.write(Serial.read());
@@ -192,19 +192,20 @@ void handleWebCommand() { // 웹으로부터의 명령 처리 함수
 
   if (cmd == "EJECT") {
     //digitalWrite(13, HIGH);
-    sendEmergencyDeploy();
+    sendEmergencyDeploy("E");
   }
   else if(cmd == "CENTER") {
     //digitalWrite(13, LOW);
+    sendEmergencyDeploy("C");
   }
 }
 
-void sendEmergencyDeploy() { // LoRa 비상 사출 송신 함수
-  const char* msg = "E";   // 1바이트(문자 1개) 커맨드
+void sendEmergencyDeploy(char c) { // LoRa 비상 사출 송신 함수
+  const char* msg = c;   // 1바이트(문자 1개) 커맨드
 
-  lora.print("AT+SEND=1,");
-  lora.print(strlen(msg));   // 1
-  lora.print(",");
+  lora.print("AT+SEND=1,1,");
+  //lora.print(strlen(msg));   // 1
+  //lora.print(",");
   lora.print(msg);
   lora.print("\r\n");
 
@@ -223,6 +224,7 @@ void setup() {
 void loop() {
   handleLoraRx();
   handleWebCommand();
+
   // if(Serial.available())
   // lora.write(Serial.read());
   // if(lora.available())

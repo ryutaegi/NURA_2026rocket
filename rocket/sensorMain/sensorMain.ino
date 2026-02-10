@@ -278,7 +278,7 @@ void parseAtoB(Stream& link, FlightData& f, uint32_t nowB_ms) {
 }
 
 
-static bool g_parachuteDeployed = false; //낙하산 사출 여부
+bool g_parachuteDeployed = false; //낙하산 사출 여부
 
 
 
@@ -334,6 +334,10 @@ void loop() {
   uint32_t nowMs = millis();
   flight.timeMs = nowMs;
 
+  handleLoraRxCommand(); // 지상국 명령 수신
+  // if(Serial2.available())
+  //   Serial.println("asdfasdf");
+
   // 1) A2B 패킷은 가능한 자주 파싱
   parseAtoB(Serial3, flight, nowMs);
 
@@ -342,10 +346,11 @@ void loop() {
   updateGps(flight, nowMs);
   //Serial2.print("AT+SEND=1,1,1");
 
-  // if(Serial2.available())
-  // Serial.write(Serial2.read());
-  // if(Serial.available())
-  // Serial2.write(Serial.read());
+  if(Serial2.available())
+  Serial.write(Serial2.read());
+  if(Serial.available())
+  Serial2.write(Serial.read());
+
   sendLoraFromFlight(flight, g_parachuteDeployed, pinDetached);
 
 
@@ -389,6 +394,8 @@ void loop() {
      Serial.print(" gz="); Serial.print(flight.imu.gz, 1);
 
      Serial.println();
+     Serial.print(" | Connect ="); Serial.print(pinDetached);
+     Serial.print(" parachute ="); Serial.print(g_parachuteDeployed);
 
      Serial.print(" | Baro Alt="); Serial.print(flight.baro.altitude, 2);
      Serial.print(" Vz="); Serial.print(flight.baro.climbRate, 2);
