@@ -178,6 +178,8 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
     });
   }, [isReplayMode, replayTime, replayData]);
 
+  
+
   // 이전 determineStage 함수는 더 이상 사용되지 않습니다. (서버의 flightPhase를 사용)
   // const determineStage = (altitude: number): RocketTelemetry['stage'] => {
   //   if (altitude <= 0.1 && speed <= 0.1) return 'landed';
@@ -275,6 +277,30 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
       }
     //}
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 입력창에서 타이핑 중일 때는 무시하고 싶으면 아래 주석 해제
+      // const tag = (e.target as HTMLElement)?.tagName;
+      // if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  
+      if (!isConnected) return; // 연결 안 되어 있으면 무시
+  
+      if (e.key === 'o') {
+        e.preventDefault();
+        handleCenterAlign();
+      } else if (e.key === 'p') {
+        e.preventDefault();
+        handleEmergencyEject();
+      }
+    };
+  
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isConnected, handleCenterAlign, handleEmergencyEject]);
+  
 
   return (
     <div className="h-[calc(100vh-4rem)] p-4 overflow-hidden flex flex-col">
