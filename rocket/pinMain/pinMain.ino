@@ -150,6 +150,7 @@ void sendAtoB(Stream& link, const FlightData& f) {
 
   link.write(buf, idx);
 }
+// AtoB 여기까지
 
 void setup() {
   Serial.begin(115200);
@@ -212,6 +213,7 @@ void loop() {
     sendAtoB(Serial3, flightData);
   }
   flightData.timeMs = millis();
+  // AtoB(추가)
 
   static float last_yaw_deg = 0.0f;
   

@@ -29,7 +29,7 @@ struct FlightData {
     // 상보필터 보정 (요 각도 기준)
     float filterRoll; 
     float servoDegree;  // 상보필터로 보정한 롤 각도 (deg)
-    uint32_t timeMs;
+    uint32_t timeMs; //A2B용
 };
 // ======================= 사용자 설정 =======================
 
