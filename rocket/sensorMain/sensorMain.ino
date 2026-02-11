@@ -195,6 +195,7 @@ void parseAtoB(Stream& link, FlightData& f, uint32_t nowB_ms) {
 
   while (link.available()) {
     uint8_t b = (uint8_t)link.read();
+    
 
     switch (st) {
       case WAIT_S1:
@@ -334,7 +335,7 @@ void loop() {
   uint32_t nowMs = millis();
   flight.timeMs = nowMs;
 
-  handleLoraRxCommand(); // 지상국 명령 수신
+  //handleLoraRxCommand(); // 지상국 명령 수신
   // if(Serial2.available())
   //   Serial.println("asdfasdf");
 
@@ -346,10 +347,10 @@ void loop() {
   updateGps(flight, nowMs);
   //Serial2.print("AT+SEND=1,1,1");
 
-  if(Serial2.available())
-  Serial.write(Serial2.read());
-  if(Serial.available())
-  Serial2.write(Serial.read());
+  // if(Serial2.available())
+  // Serial.write(Serial2.read());
+  // if(Serial.available())
+  // Serial2.write(Serial.read());
 
   sendLoraFromFlight(flight, g_parachuteDeployed, pinDetached);
 

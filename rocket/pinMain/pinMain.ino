@@ -67,8 +67,93 @@ float fmap(float x, float in_min, float in_max, float out_min, float out_max) {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
+// AtoB 데이터 UART송신(추가)
+// 패킷 내용
+static const uint8_t SYNC1 = 0xA5;
+static const uint8_t SYNC2 = 0x5A;
+static const uint8_t VER   = 1;
+static const uint8_t MSG   = 0x21;
+static const uint8_t LEN   = 20;
+
+static uint16_t g_seq = 0;
+
+// ====== CRC16 CCITT-FALSE ======
+static uint16_t crc16_ccitt(const uint8_t* data, size_t len) {
+  uint16_t crc = 0xFFFF;
+  for (size_t i = 0; i < len; i++) {
+    crc ^= (uint16_t)data[i] << 8;
+    for (int b = 0; b < 8; b++) {
+      crc = (crc & 0x8000) ? (uint16_t)((crc << 1) ^ 0x1021) : (uint16_t)(crc << 1);
+    }
+  }
+  return crc;
+}
+
+// 반올림
+static inline int32_t iround(float x) { return (x >= 0.0f) ? (int32_t)(x + 0.5f) : (int32_t)(x - 0.5f); }
+
+static inline int16_t s16_scale(float x, float scale) {
+  int32_t v = iround(x * scale);
+  if (v > 32767) v = 32767;
+  if (v < -32768) v = -32768;
+  return (int16_t)v;
+}
+
+static inline void push_u16_le(uint8_t* buf, int& idx, uint16_t v) {
+  buf[idx++] = (uint8_t)(v & 0xFF);
+  buf[idx++] = (uint8_t)((v >> 8) & 0xFF);
+}
+static inline void push_i16_le(uint8_t* buf, int& idx, int16_t v) { push_u16_le(buf, idx, (uint16_t)v); }
+static inline void push_u32_le(uint8_t* buf, int& idx, uint32_t v) {
+  buf[idx++] = (uint8_t)(v & 0xFF);
+  buf[idx++] = (uint8_t)((v >> 8) & 0xFF);
+  buf[idx++] = (uint8_t)((v >> 16) & 0xFF);
+  buf[idx++] = (uint8_t)((v >> 24) & 0xFF);
+}
+
+// ====== Send function ======
+void sendAtoB(Stream& link, const FlightData& f) {
+  uint8_t buf[64];
+  int idx = 0;
+
+  // SYNC
+  buf[idx++] = SYNC1;
+  buf[idx++] = SYNC2;
+
+  // Header
+  buf[idx++] = VER;
+  buf[idx++] = MSG;
+  buf[idx++] = LEN;
+  push_u16_le(buf, idx, g_seq++);
+  push_u32_le(buf, idx, f.timeMs);
+
+  // Payload (10 * int16 = 20 bytes)
+  // accel: m/s^2 * 10
+  push_i16_le(buf, idx, s16_scale(f.imu.ax, 100.0f));
+  push_i16_le(buf, idx, s16_scale(f.imu.ay, 100.0f));
+  push_i16_le(buf, idx, s16_scale(f.imu.az, 100.0f));
+
+  // gyro: deg/s * 10
+  push_i16_le(buf, idx, s16_scale(f.imu.gx, 10.0f));
+  push_i16_le(buf, idx, s16_scale(f.imu.gy, 10.0f));
+  push_i16_le(buf, idx, s16_scale(f.imu.gz, 10.0f));
+
+  // angles: deg * 100
+  push_i16_le(buf, idx, s16_scale(f.roll,       100.0f));
+  push_i16_le(buf, idx, s16_scale(f.filterRoll, 100.0f));
+  push_i16_le(buf, idx, s16_scale(f.pitch,      100.0f));
+  push_i16_le(buf, idx, s16_scale(f.yaw,        100.0f));
+
+  // CRC over [VER..PAYLOAD]
+  uint16_t crc = crc16_ccitt(&buf[2], (size_t)(idx - 2));
+  push_u16_le(buf, idx, crc);
+
+  link.write(buf, idx);
+}
+
 void setup() {
   Serial.begin(115200);
+  Serial3.begin(115200);
   delay(200);
 
   WIRE_PORT.begin();
@@ -118,6 +203,15 @@ void loop() {
   imu.getAGMT(); // 데이터 읽기
 
   processIMU();  // 상보필터 업데이트
+
+    // AtoB(추가)
+  static uint32_t lastTx = 0;
+  uint32_t now = millis();
+  if (now - lastTx >= 10) {
+    lastTx += 10;
+    sendAtoB(Serial3, flightData);
+  }
+  flightData.timeMs = millis();
 
   static float last_yaw_deg = 0.0f;
   
@@ -191,6 +285,8 @@ void loop() {
   // 모터 출력
   writeServoDeg(MOTOR_CH1, servoDeg);
   writeServoDeg(MOTOR_CH2, servoDeg);
+
+
 
   // ====== 시리얼 출력 ======
   uint32_t nowMs = millis();

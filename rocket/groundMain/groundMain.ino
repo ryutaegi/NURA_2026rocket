@@ -163,19 +163,19 @@ void handleLoraRx() { // 로켓으로부터의 텔레메트리 수신 함수
   }
 
   // 시리얼 포트로 패킷 전송
-  Serial.write((uint8_t*)&packet, sizeof(packet));
+  //Serial.write((uint8_t*)&packet, sizeof(packet));
 
 
-  // Serial.print("ROLL=");  Serial.print(packet.roll);
-  // Serial.print(" PITCH=");Serial.print(packet.pitch);
-  // Serial.print(" YAW=");  Serial.print(packet.yaw);
-  // Serial.print(" LAT=");  Serial.print(packet.lat, 7);
-  // Serial.print(" LON=");  Serial.print(packet.lon, 7);
-  // Serial.print(" ALT=");  Serial.print(packet.alt);
-  // Serial.print(" TEMP="); Serial.print(packet.temp);
-  // Serial.print(" CONNECT=");  Serial.print(packet.connect);
-  // Serial.print(" PARA="); Serial.print(packet.para);
-  // Serial.print(" PHASE=");Serial.println(packet.phase);
+  Serial.print("ROLL=");  Serial.print(packet.roll);
+  Serial.print(" PITCH=");Serial.print(packet.pitch);
+  Serial.print(" YAW=");  Serial.print(packet.yaw);
+  Serial.print(" LAT=");  Serial.print(packet.lat, 7);
+  Serial.print(" LON=");  Serial.print(packet.lon, 7);
+  Serial.print(" ALT=");  Serial.print(packet.alt);
+  Serial.print(" TEMP="); Serial.print(packet.temp);
+  Serial.print(" CONNECT=");  Serial.print(packet.connect);
+  Serial.print(" PARA="); Serial.print(packet.para);
+  Serial.print(" PHASE=");Serial.println(packet.phase);
 
   // if(Serial.available())
   // lora.write(Serial.read());
@@ -222,9 +222,9 @@ void setup() {
 
 
 void loop() {
-  handleLoraRx();
-  handleWebCommand();
-
+   handleLoraRx();
+   handleWebCommand();
+  //sendEmergencyDeploy("E");
   // if(Serial.available())
   // lora.write(Serial.read());
   // if(lora.available())
