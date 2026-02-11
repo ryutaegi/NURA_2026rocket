@@ -47,21 +47,21 @@ void sweepOnce()
   // 0 -> 180 스윕
   for (float d = startDeg1; d <= endDeg1; d += STARTUP_SWEEP_STEP_DEG) {
     writeServoDeg(MOTOR_CH1, d);
-    // delay(15);
+     delay(15);
   }
   for (float d = startDeg2; d <= endDeg2; d += STARTUP_SWEEP_STEP_DEG) {
     writeServoDeg(MOTOR_CH2, d);
-    // delay(15);
+     delay(15);
   }
 
   // 180 -> 90(중립) 복귀 (원하면 180->0까지 왕복도 가능)
   for (float d = endDeg1; d >= SERVO_NEUTRAL_DEG1; d -= STARTUP_SWEEP_STEP_DEG) {
     writeServoDeg(MOTOR_CH1, d);
-    // delay(15);
+     delay(15);
   }
   for (float d = endDeg2; d >= SERVO_NEUTRAL_DEG2; d -= STARTUP_SWEEP_STEP_DEG) {
     writeServoDeg(MOTOR_CH2, d);
-    // delay(15);
+     delay(15);
   }
 
   // 최종 중립 고정

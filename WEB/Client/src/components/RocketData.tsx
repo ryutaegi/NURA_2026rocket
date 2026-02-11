@@ -12,18 +12,18 @@ export default function RocketData({ telemetry }: RocketDataProps) {
       icon: Gauge,
       color: 'text-blue-400',
     },
-    {
-      label: '기압',
-      value: `${telemetry.pressure.toFixed(1)} hPa`,
-      icon: Gauge,
-      color: 'text-purple-400',
-    },
-    {
-      label: '진행방향 속도',
-      value: `${telemetry.speed.toFixed(1)} m/s`,
-      icon: Wind,
-      color: 'text-green-400',
-    },
+    // {
+    //   label: '기압',
+    //   value: `${telemetry.pressure.toFixed(1)} hPa`,
+    //   icon: Gauge,
+    //   color: 'text-purple-400',
+    // },
+    // {
+    //   label: '진행방향 속도',
+    //   value: `${telemetry.speed.toFixed(1)} m/s`,
+    //   icon: Wind,
+    //   color: 'text-green-400',
+    // },
     {
       label: '온도',
       value: `${telemetry.temperature.toFixed(1)} °C`,
