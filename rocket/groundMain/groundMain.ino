@@ -222,12 +222,12 @@ void setup() {
 
 
 void loop() {
-   handleLoraRx();
-   handleWebCommand();
+  //  handleLoraRx();
+  //  handleWebCommand();
   //sendEmergencyDeploy("E");
-  // if(Serial.available())
-  // lora.write(Serial.read());
-  // if(lora.available())
-  // Serial.write(lora.read());
+  if(Serial.available())
+  lora.write(Serial.read());
+  if(lora.available())
+  Serial.write(lora.read());
   }
 

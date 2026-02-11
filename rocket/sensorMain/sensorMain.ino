@@ -347,10 +347,10 @@ void loop() {
   updateGps(flight, nowMs);
   //Serial2.print("AT+SEND=1,1,1");
 
-  // if(Serial2.available())
-  // Serial.write(Serial2.read());
-  // if(Serial.available())
-  // Serial2.write(Serial.read());
+  if(Serial2.available())
+  Serial.write(Serial2.read());
+  if(Serial.available())
+  Serial2.write(Serial.read());
 
   sendLoraFromFlight(flight, g_parachuteDeployed, pinDetached);
 
@@ -380,32 +380,32 @@ void loop() {
 
      uint32_t ageA = (flight.aRxTimeMs == 0) ? 0xFFFFFFFFUL : (nowMs - flight.aRxTimeMs);
 
-     Serial.print("ageA_ms="); Serial.print(ageA);
-     Serial.print(" roll="); Serial.print(flight.roll, 2);
-     Serial.print(" fRoll="); Serial.print(flight.filterRoll, 2);
-     Serial.print(" pitch="); Serial.print(flight.pitch, 2);
-     Serial.print(" yaw="); Serial.print(flight.yaw, 2);
+    //  Serial.print("ageA_ms="); Serial.print(ageA);
+    //  Serial.print(" roll="); Serial.print(flight.roll, 2);
+    //  Serial.print(" fRoll="); Serial.print(flight.filterRoll, 2);
+    //  Serial.print(" pitch="); Serial.print(flight.pitch, 2);
+    //  Serial.print(" yaw="); Serial.print(flight.yaw, 2);
 
-     Serial.print(" | ax="); Serial.print(flight.imu.ax, 1);
-     Serial.print(" ay="); Serial.print(flight.imu.ay, 1);
-     Serial.print(" az="); Serial.print(flight.imu.az, 1);
+    //  Serial.print(" | ax="); Serial.print(flight.imu.ax, 1);
+    //  Serial.print(" ay="); Serial.print(flight.imu.ay, 1);
+    //  Serial.print(" az="); Serial.print(flight.imu.az, 1);
 
-     Serial.print(" | gx="); Serial.print(flight.imu.gx, 1);
-     Serial.print(" gy="); Serial.print(flight.imu.gy, 1);
-     Serial.print(" gz="); Serial.print(flight.imu.gz, 1);
+    //  Serial.print(" | gx="); Serial.print(flight.imu.gx, 1);
+    //  Serial.print(" gy="); Serial.print(flight.imu.gy, 1);
+    //  Serial.print(" gz="); Serial.print(flight.imu.gz, 1);
 
-     Serial.println();
-     Serial.print(" | Connect ="); Serial.print(pinDetached);
-     Serial.print(" parachute ="); Serial.print(g_parachuteDeployed);
+    //  Serial.println();
+    //  Serial.print(" | Connect ="); Serial.print(pinDetached);
+    //  Serial.print(" parachute ="); Serial.print(g_parachuteDeployed);
 
-     Serial.print(" | Baro Alt="); Serial.print(flight.baro.altitude, 2);
-     Serial.print(" Vz="); Serial.print(flight.baro.climbRate, 2);
+    //  Serial.print(" | Baro Alt="); Serial.print(flight.baro.altitude, 2);
+    //  Serial.print(" Vz="); Serial.print(flight.baro.climbRate, 2);
 
-     Serial.print(" | GPS fix="); Serial.print(flight.gps.fix);
-     Serial.print(" sats="); Serial.print(flight.gps.sats);
-     Serial.print(" latE7="); Serial.print(flight.gps.latitudeE7);
-     Serial.print(" lonE7="); Serial.print(flight.gps.longitudeE7);
-     Serial.println();
+    //  Serial.print(" | GPS fix="); Serial.print(flight.gps.fix);
+    //  Serial.print(" sats="); Serial.print(flight.gps.sats);
+    //  Serial.print(" latE7="); Serial.print(flight.gps.latitudeE7);
+    //  Serial.print(" lonE7="); Serial.print(flight.gps.longitudeE7);
+    //  Serial.println();
    }
    static uint32_t lastLogMs = 0;
   if (nowMs - lastLogMs >= 50) { // 예: 20Hz 로깅
