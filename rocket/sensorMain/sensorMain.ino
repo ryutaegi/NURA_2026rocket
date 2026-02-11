@@ -346,10 +346,10 @@ void loop() {
   updateGps(flight, nowMs);
   //Serial2.print("AT+SEND=1,1,1");
 
-  if(Serial2.available())
-  Serial.write(Serial2.read());
-  if(Serial.available())
-  Serial2.write(Serial.read());
+  // if(Serial2.available())
+  // Serial.write(Serial2.read());
+  // if(Serial.available())
+  // Serial2.write(Serial.read());
 
   sendLoraFromFlight(flight, g_parachuteDeployed, pinDetached);
 
@@ -374,7 +374,7 @@ void loop() {
 
    // 디버그(0.5초마다)
    static uint32_t lastPrint = 0;
-   if (nowMs - lastPrint >= 200) {
+   if (nowMs - lastPrint >= 500) {
      lastPrint = nowMs;
 
      uint32_t ageA = (flight.aRxTimeMs == 0) ? 0xFFFFFFFFUL : (nowMs - flight.aRxTimeMs);

@@ -191,25 +191,29 @@ void handleWebCommand() { // 웹으로부터의 명령 처리 함수
   cmd.trim();
 
   if (cmd == "EJECT") {
-    //digitalWrite(13, HIGH);
-    sendEmergencyDeploy("E");
+    digitalWrite(13, HIGH);
+    sendEmergencyDeploy();
   }
   else if(cmd == "CENTER") {
-    //digitalWrite(13, LOW);
-    sendEmergencyDeploy("C");
+    digitalWrite(13, LOW);
+    sendCenter();
   }
 }
 
-void sendEmergencyDeploy(char c) { // LoRa 비상 사출 송신 함수
-  const char* msg = c;   // 1바이트(문자 1개) 커맨드
+void sendEmergencyDeploy() { // LoRa 비상 사출 송신 함수
+  for(int i=0; i<10; i++){
+  lora.print("AT+SEND=1,1,E\r\n");
+  delay(50);
+  }
+  Serial.println("[lora] EMERGENCY DEPLOY SENT (\"E\")");
+}
 
-  lora.print("AT+SEND=1,1,");
-  //lora.print(strlen(msg));   // 1
-  //lora.print(",");
-  lora.print(msg);
-  lora.print("\r\n");
-
-  Serial.println("[GS] EMERGENCY DEPLOY SENT (\"E\")");
+void sendCenter() { // LoRa 비상 사출 송신 함수
+  for(int i=0; i<10; i++){
+  lora.print("AT+SEND=1,1,C\r\n");
+  delay(50);
+  }
+  Serial.println("[lora] CENTER SENT (\"C\")");
 }
 
 
@@ -217,13 +221,16 @@ void setup() {
   Serial.begin(115200);
   lora.begin(9600);
   Serial.println("RX READY");
-  //pinMode(13, OUTPUT);
+  pinMode(13, OUTPUT);
 }
 
 
 void loop() {
   handleLoraRx();
   handleWebCommand();
+  //  delay(1000);
+
+
 
   // if(Serial.available())
   // lora.write(Serial.read());

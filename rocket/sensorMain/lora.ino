@@ -8,8 +8,8 @@
 // ======================= LoRa 설정 =======================
 #define LORA_PORT  Serial2
 static const uint32_t LORA_BAUD = 9600;
-static const uint8_t  LORA_ADDR = 0;            // AT+SEND=1,...
-static const uint32_t LORA_PERIOD_MS = 400;     // 5Hz 송신
+static const uint8_t  LORA_ADDR = 0;            // AT+SEND=0,...
+static const uint32_t LORA_PERIOD_MS = 500;     //  송신 hz
 
 // ======================= base64 =======================
 static const char b64_tbl[] =
@@ -122,7 +122,7 @@ void handleLoraRxCommand() {
   while (LORA_PORT.available()) {
     //Serial.println("Serial2 available!");  // ← 이거 추가
     String line = LORA_PORT.readStringUntil('\n');
-    Serial.println(line);
+    //Serial.println(line);
     line.trim();
     if (!line.startsWith("+RCV=")) continue;
     Serial.println("입력받음");
@@ -137,9 +137,10 @@ void handleLoraRxCommand() {
     if (data == "E") {
       g_parachuteDeployed = true;
       //emergencyDeploy();
+      Serial.println("receive EEE");
     }
     if (data == "C") {
-
+Serial.println("receive CCC");
     }
   }
 }
