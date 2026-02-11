@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Rocket, MapPin, History } from 'lucide-react';
 import MainPage from './components/MainPage';
@@ -61,12 +62,37 @@ function Navigation() {
 }
 
 export default function App() {
+  const [centerAlign, setCenterAlign] = useState(false);
+  const [emergencyEjection, setEmergencyEjection] = useState(false);
+
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      if (event.key === '!') {
+        setCenterAlign(prev => {
+          console.log('Center align toggled:', !prev);
+          return !prev;
+        });
+      } else if (event.key === '@') {
+        setEmergencyEjection(true);
+        console.log('Emergency ejection triggered!');
+        // For now, reset after a short delay or when action is acknowledged
+        setTimeout(() => setEmergencyEjection(false), 2000); 
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+    };
+  }, []);
+
   return (
     <Router>
       <div className="min-h-screen bg-gray-950">
         <Navigation />
         <Routes>
-          <Route path="/" element={<MainPage />} />
+          <Route path="/" element={<MainPage centerAlign={centerAlign} emergencyEjection={emergencyEjection} />} />
           <Route path="/recovery" element={<RecoveryPage />} />
           <Route path="/history" element={<LaunchHistoryPage />} />
         </Routes>

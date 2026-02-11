@@ -1,5 +1,5 @@
 import { RocketTelemetry } from './MainPage';
-import { Gauge, Thermometer, Wind, Battery, MapPin } from 'lucide-react';
+import { Gauge, Thermometer, Wind, Battery, MapPin, Droplet, Cloud, Contact2Icon, Pin } from 'lucide-react'; // Droplet, Cloud 아이콘 추가
 interface RocketDataProps {
   telemetry: RocketTelemetry;
 }
@@ -18,7 +18,38 @@ export default function RocketData({ telemetry }: RocketDataProps) {
       icon: Gauge,
       color: 'text-purple-400',
     },
+    {
+      label: '진행방향 속도',
+      value: `${telemetry.speed.toFixed(1)} m/s`,
+      icon: Wind,
+      color: 'text-green-400',
+    },
+    {
+      label: '온도',
+      value: `${telemetry.temperature.toFixed(1)} °C`,
+      icon: Thermometer,
+      color: 'text-orange-400',
+    },
+    {
+      label: '커넥트핀',
+      value: telemetry.connect === 1 ? '해제됨' : '연결됨',
+      icon: Pin, // Droplet 아이콘 사용
+      color: telemetry.connect === 1 ? 'text-blue-400' : 'text-red-400',
+    },
+    {
+      label: '낙하산',
+      value: telemetry.parachuteStatus === 1 ? '전개됨' : '미전개',
+      icon: Cloud, // Cloud 아이콘 사용
+      color: telemetry.parachuteStatus === 1 ? 'text-green-400' : 'text-gray-400',
+    },
+    // {
+    //   label: '배터리',
+    //   value: `${telemetry.battery.toFixed(0)} %`,
+    //   icon: Battery,
+    //   color: telemetry.battery > 20 ? 'text-green-400' : 'text-red-400',
+    // },
   ];
+
 
   return (
     <div className="h-full flex flex-col">
@@ -39,7 +70,7 @@ export default function RocketData({ telemetry }: RocketDataProps) {
                 {item.value}
               </div>
               
-              {/* 배터리 바 */}
+              {/* 배터리 바 (배터리 항목일 때만 렌더링)
               {item.label === '배터리' && (
                 <div className="mt-2 w-full bg-gray-700 rounded-full h-2">
                   <div
@@ -49,7 +80,7 @@ export default function RocketData({ telemetry }: RocketDataProps) {
                     style={{ width: `${telemetry.battery}%` }}
                   />
                 </div>
-              )}
+              )} */}
             </div>
           );
         })}
@@ -62,11 +93,8 @@ export default function RocketData({ telemetry }: RocketDataProps) {
           <span className="text-sm text-gray-400">GPS 좌표</span>
         </div>
 
-        
-       
-
-        <div className="text-sm text-white space-y-1"></div>
-        <div className="flex items-center justify-between">
+        <div className="text-sm text-white space-y-1">
+          <div className="flex items-center justify-between">
             <span className="text-gray-400">위도</span>
             <span className="font-mono text-red-400">{telemetry.latitude.toFixed(6)}°</span>
           </div>
@@ -75,11 +103,8 @@ export default function RocketData({ telemetry }: RocketDataProps) {
             <span className="font-mono text-red-400">{telemetry.longitude.toFixed(6)}°</span>
           </div>
         </div>
-
-        </div>
-        
-      
-  
+      </div>
+      </div>
   );
 }
 

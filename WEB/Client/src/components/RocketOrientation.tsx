@@ -49,7 +49,7 @@ export default function RocketOrientation({ telemetry }: RocketOrientationProps)
 
     // 로켓 그룹 생성
     const rocket = new THREE.Group();
-    rocket.position.y = -3; // 그리드 높이에 맞춤
+    rocket.position.y = 0; // 그리드 높이에 맞춤
     scene.add(rocket);
     rocketRef.current = rocket;
     
@@ -66,9 +66,9 @@ export default function RocketOrientation({ telemetry }: RocketOrientationProps)
         box.getSize(size);
         const center = box.getCenter(new THREE.Vector3());
 
-        // X, Z 축은 중앙에, Y 축은 바닥에 맞춤
+        // X, Y, Z 축 모두 모델의 중심으로 이동
         model.position.x -= center.x;
-        model.position.y -= box.min.y;
+        model.position.y -= center.y; // 회전축을 로켓의 중심으로 변경
         model.position.z -= center.z;
 
         // 모델 크기를 약 4 유닛에 맞게 스케일 조절

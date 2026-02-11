@@ -1,16 +1,17 @@
 import { Check } from 'lucide-react';
 
 interface LaunchStagesProps {
-  stage: 'pre-launch' | 'launch' | 'ascent' | 'descent' | 'parachute_deployment' | 'landed';
+  stage: 'pre-launch' | 'launch' | 'powered' | 'coasting' | 'apogee' | 'descent' | 'landed';
 }
 
 export default function LaunchStages({ stage }: LaunchStagesProps) {
   const stages = [
     { id: 'pre-launch', label: '발사 준비', color: 'gray' },
-    { id: 'launch', label: '발사', color: 'yellow' },
-    { id: 'ascent', label: '상승', color: 'orange' },
+    { id: 'launch', label: '이륙', color: 'yellow' },
+    { id: 'powered', label: '동력 비행', color: 'orange' },
+    { id: 'coasting', label: '관성 비행', color: 'cyan' },
+    { id: 'apogee', label: '최고 고도', color: 'purple' },
     { id: 'descent', label: '하강', color: 'blue' },
-    { id: 'parachute_deployment', label: '낙하산 사출', color: 'purple' },
     { id: 'landed', label: '착륙', color: 'green' },
   ];
 
@@ -27,11 +28,12 @@ export default function LaunchStages({ stage }: LaunchStagesProps) {
         gray: 'bg-gray-600',
         yellow: 'bg-yellow-500',
         orange: 'bg-orange-500',
-        blue: 'bg-blue-500',
+        cyan: 'bg-cyan-500',
         purple: 'bg-purple-500',
+        blue: 'bg-blue-500',
         green: 'bg-green-500',
       };
-      return colorMap[color] || 'bg-blue-500';
+      return colorMap[color] || 'bg-gray-500';
     }
     return 'bg-gray-700'; // 대기
   };
@@ -66,7 +68,7 @@ export default function LaunchStages({ stage }: LaunchStagesProps) {
                 {s.label}
               </div>
               {index === currentIndex && (
-                <div className="text-xs text-blue-400 mt-0.5">진행 중...</div>
+                <div className="text-xs text-cyan-400 mt-0.5">진행 중...</div>
               )}
             </div>
           </div>
