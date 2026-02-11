@@ -34,13 +34,13 @@ export default function RocketData({ telemetry }: RocketDataProps) {
       label: '커넥트핀',
       value: telemetry.connect === 1 ? '해제됨' : '연결됨',
       icon: Pin, // Droplet 아이콘 사용
-      color: telemetry.connect === 1 ? 'text-green-400' : 'text-blue-400',
+      color: telemetry.connect === 1 ? 'text-blue-400' : 'text-red-400',
     },
     {
       label: '낙하산',
       value: telemetry.parachuteStatus === 1 ? '전개됨' : '미전개',
       icon: Cloud, // Cloud 아이콘 사용
-      color: telemetry.parachuteStatus === 1 ? 'text-green-400' : 'text-blue-400',
+      color: telemetry.parachuteStatus === 1 ? 'text-green-400' : 'text-red-400',
     },
     // {
     //   label: '배터리',

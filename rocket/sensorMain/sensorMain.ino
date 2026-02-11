@@ -16,6 +16,7 @@ File logFile;
 static const int SD_CS_PIN = 10;
 //커넥트핀 연결을 단 한번만 판단하게함
 bool pinDetached = false;  
+bool g_parachuteDeployed = false; //낙하산 사출 여부
 
 FlightData flight;
 // 1) BMP280
@@ -278,7 +279,7 @@ void parseAtoB(Stream& link, FlightData& f, uint32_t nowB_ms) {
 }
 
 
-bool g_parachuteDeployed = false; //낙하산 사출 여부
+
 
 
 
