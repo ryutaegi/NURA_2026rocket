@@ -2,8 +2,7 @@
 
 SoftwareSerial lora(2, 3); // RX, TX
 
-
-
+int ejection = false;
 struct __attribute__((packed)) FlightDataPacket {
   // 시작을 알리는 Sync Byte (1 byte)
   const uint8_t start_byte = 0xAA;
@@ -150,6 +149,11 @@ void handleLoraRx() { // 로켓으로부터의 텔레메트리 수신 함수
 
   packet.connect= raw[idx++];
   packet.phase = raw[idx] / 10;
+  if(ejection==1){
+    packet.para = 2;
+    ejection = false;
+  }
+  else
   packet.para = raw[idx++] % 10;
   packet.pressure = random(500, 1000);   
   packet.speed = random(0, 100); 
@@ -208,7 +212,7 @@ void sendEmergencyDeploy() { // LoRa 비상 사출 송신 함수
   Serial.println("[lora] EMERGENCY DEPLOY SENT (\"E\")");
 }
 
-void sendCenter() { // LoRa 비상 사출 송신 함수
+void sendCenter() { // LoRa 중앙 정렬 송신 함수
   for(int i=0; i<10; i++){
   lora.print("AT+SEND=1,1,C\r\n");
   delay(50);
@@ -222,13 +226,19 @@ void setup() {
   lora.begin(9600);
   Serial.println("RX READY");
   pinMode(13, OUTPUT);
+  pinMode(9, INPUT_PULLUP);
 }
 
 
 void loop() {
   handleLoraRx();
   handleWebCommand();
-  //  delay(1000);
+  
+  if(digitalRead(9)==LOW)
+  {
+    ejection = true;
+    sendEmergencyDeploy();
+  }
 
 
 
