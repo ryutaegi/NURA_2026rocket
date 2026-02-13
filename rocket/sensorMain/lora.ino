@@ -115,7 +115,7 @@ void sendLoraFromFlight(const FlightData& f, bool parachuteDeployed, uint8_t con
   LORA_PORT.print(",");
   LORA_PORT.print(payload);
   LORA_PORT.print("\r\n");
-  Serial.println("send");
+ // Serial.println("send");
 }
 
 // Serial2(=LORA_PORT)에서 한 줄씩 받아서 +RCV 파싱
