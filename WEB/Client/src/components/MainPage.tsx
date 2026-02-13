@@ -47,6 +47,8 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
   const location = useLocation();
   const replayLaunch = (location.state as any)?.replayLaunch;
   const { isConnected, lastMessage, sendMessage } = useWebSocket();
+  const audioRef = useRef(null);
+  const [unlocked, setUnlocked] = useState(false);
 
   const [telemetry, setTelemetry] = useState<RocketTelemetry>({
     latitude: 37.5665,
@@ -73,6 +75,34 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
   const [replayData, setReplayData] = useState<any>(null);
   const [showConnectedBanner, setShowConnectedBanner] = useState(false);
   const recordingStartTime = useRef<number>(0);
+
+  const unlockAudio = async () => {
+    const audio = audioRef.current;
+    if (!audio) {
+      console.error("❌ audioRef가 null입니다");
+      return;
+    }
+  
+    try {
+      console.log("▶️ 오디오 언락 시도");
+  
+      audio.muted = false;
+      audio.currentTime = 0;
+  
+      await audio.play();   // 여기서 실패하면 catch로 갑니다
+  
+      console.log("✅ play() 성공");
+      setUnlocked(true);
+    } catch (e) {
+      console.error("❌ 오디오 재생 실패:", e);
+      alert("오디오 재생 실패: 콘솔(F12) 확인하세요");
+    }
+  };
+  
+
+  const playLater = () => {
+    audioRef.current.play(); // 이제는 언제든지 재생 가능
+  };
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -101,7 +131,17 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
       if(data.parachuteStatus == 2)
       {
         toast.success(data.message ||'비상 사출 명령을 성공적으로 전송했습니다.');
-        
+
+      }
+      if(data.connect == 3) { //커넥트핀 해제
+        toast.success(data.message || "카운트다운 시작");
+        playLater();
+        data.connect = 1;
+      }
+      if(data.connect == 2) { //커넥트핀 연결
+        toast.success(data.message ||"카운트다운 시작");
+        playLater();
+        data.connect = 0;
       }
       
       setTelemetry({
@@ -269,7 +309,7 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
     //}
   };
 
-  const handleCenterAlign = async () => {
+  const handleCenterAlign = async () => { //소리 출력
     //if (window.confirm('정말로 중앙 정렬 명령을 보내시겠습니까?')) {
       try {
         const response = await fetch('/api/center-align', { method: 'POST' });
@@ -277,7 +317,7 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
         if (!response.ok) {
           throw new Error(data.message || '알 수 없는 오류가 발생했습니다.');
         }
-        toast.success(data.message || '중앙 정렬 명령을 성공적으로 전송했습니다.');
+        toast.success(data.message || '카운트다운 시작');
       } catch (error: any) {
         toast.error(`명령 전송 실패: ${error.message}`);
       }
@@ -306,6 +346,8 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isConnected, handleCenterAlign, handleEmergencyEject]);
+
+  
   
 
   return (
@@ -404,14 +446,26 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
           { !(isReplayMode || isRecording) && (
           <div className="bg-gray-900 rounded-lg p-4">
             <div className="flex gap-3">
-              <button
-                onClick={handleCenterAlign}
+            <audio ref={audioRef} src="/sounds/count.mp3" />
+            {!unlocked ? (
+                <button
+                onClick={unlockAudio}
                 disabled={!isConnected}
                 className="flex-1 bg-yellow-500 hover:bg-yellow-700 text-white px-4 py-3 rounded-lg transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 <Circle className="h-5 w-5" />
-                중앙 정렬
+                사운드 허용
               </button>
+              ) : (
+                <button
+                onClick={playLater}
+                disabled={!isConnected}
+                className="flex-1 bg-yellow-500 hover:bg-yellow-700 text-white px-4 py-3 rounded-lg transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <Circle className="h-5 w-5" />
+                음소거 해제
+              </button>
+              )}
 
               <button
                 onClick={handleEmergencyEject}

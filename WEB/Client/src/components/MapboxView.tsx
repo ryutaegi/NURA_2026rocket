@@ -201,8 +201,8 @@ export default function MapboxView({ telemetry }: MapboxViewProps) {
 
         // 4. 모델 방향 업데이트
         model.rotation.set(
-            telemetry.pitch * (Math.PI / 180) + Math.PI / 2, // 기본 X축 90도 회전 + pitch
             telemetry.roll * (Math.PI / 180),
+            telemetry.pitch * (Math.PI / 180) + Math.PI / 2, // 기본 X축 90도 회전 + pitch
             telemetry.yaw * (Math.PI / 180)
         );
         

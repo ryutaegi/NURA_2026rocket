@@ -21,7 +21,7 @@ print(f'Each record size = {record_size} bytes')
 # ===============================
 # 파일 열고 FlightData 읽기
 # ===============================
-filename = 'FLIGHT.BIN'
+filename = 'FL0016.BIN'
 records = []
 
 with open(filename, 'rb') as f:

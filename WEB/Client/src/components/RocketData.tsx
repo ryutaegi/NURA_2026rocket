@@ -38,9 +38,9 @@ export default function RocketData({ telemetry }: RocketDataProps) {
     },
     {
       label: '낙하산',
-      value: telemetry.parachuteStatus > 1 ? '사출됨' : '미사출',
+      value: telemetry.parachuteStatus > 0 ? '사출됨' : '미사출',
       icon: Cloud, // Cloud 아이콘 사용
-      color: telemetry.parachuteStatus > 1 ? 'text-green-400' : 'text-red-400',
+      color: telemetry.parachuteStatus > 0 ? 'text-green-400' : 'text-red-400',
     },
     // {
     //   label: '배터리',

@@ -3,6 +3,7 @@
 SoftwareSerial lora(2, 3); // RX, TX
 
 int ejection = false;
+int sound = false;
 struct __attribute__((packed)) FlightDataPacket {
   // 시작을 알리는 Sync Byte (1 byte)
   const uint8_t start_byte = 0xAA;
@@ -147,11 +148,22 @@ void handleLoraRx() { // 로켓으로부터의 텔레메트리 수신 함수
   packet.alt = read16(raw, idx) / 100;
   packet.temp = read16(raw, idx) / 100.0;
 
+  if(sound == true) { //소리버튼 클릭
+  //Serial.println("SOUND send (\"E\")");
+    if(raw[idx] == 1) 
+      packet.connect = 3; //커넥트핀 해제
+    else
+      packet.connect = 2; //커넥트핀 연결
+  idx++;
+  sound = false;
+  }
+  else
   packet.connect= raw[idx++];
   packet.phase = raw[idx] / 10;
-  if(ejection==1){
+  if(ejection==true){
     packet.para = 2;
     ejection = false;
+    idx++;
   }
   else
   packet.para = raw[idx++] % 10;
@@ -170,16 +182,16 @@ void handleLoraRx() { // 로켓으로부터의 텔레메트리 수신 함수
   Serial.write((uint8_t*)&packet, sizeof(packet));
 
 
-  // Serial.print("ROLL=");  Serial.print(packet.roll);
-  // Serial.print(" PITCH=");Serial.print(packet.pitch);
-  // Serial.print(" YAW=");  Serial.print(packet.yaw);
-  // Serial.print(" LAT=");  Serial.print(packet.lat, 7);
-  // Serial.print(" LON=");  Serial.print(packet.lon, 7);
-  // Serial.print(" ALT=");  Serial.print(packet.alt);
-  // Serial.print(" TEMP="); Serial.print(packet.temp);
-  // Serial.print(" CONNECT=");  Serial.print(packet.connect);
-  // Serial.print(" PARA="); Serial.print(packet.para);
-  // Serial.print(" PHASE=");Serial.println(packet.phase);
+  Serial.print("ROLL=");  Serial.print(packet.roll);
+  Serial.print(" PITCH=");Serial.print(packet.pitch);
+  Serial.print(" YAW=");  Serial.print(packet.yaw);
+  Serial.print(" LAT=");  Serial.print(packet.lat, 7);
+  Serial.print(" LON=");  Serial.print(packet.lon, 7);
+  Serial.print(" ALT=");  Serial.print(packet.alt);
+  Serial.print(" TEMP="); Serial.print(packet.temp);
+  Serial.print(" CONNECT=");  Serial.print(packet.connect);
+  Serial.print(" PARA="); Serial.print(packet.para);
+  Serial.print(" PHASE=");Serial.println(packet.phase);
 
   // if(Serial.available())
   // lora.write(Serial.read());
@@ -209,7 +221,7 @@ void sendEmergencyDeploy() { // LoRa 비상 사출 송신 함수
   lora.print("AT+SEND=1,1,E\r\n");
   delay(50);
   }
-  Serial.println("[lora] EMERGENCY DEPLOY SENT (\"E\")");
+  //Serial.println("[lora] EMERGENCY DEPLOY SENT (\"E\")");
 }
 
 void sendCenter() { // LoRa 중앙 정렬 송신 함수
@@ -217,7 +229,7 @@ void sendCenter() { // LoRa 중앙 정렬 송신 함수
   lora.print("AT+SEND=1,1,C\r\n");
   delay(50);
   }
-  Serial.println("[lora] CENTER SENT (\"C\")");
+  //Serial.println("[lora] CENTER SENT (\"C\")");
 }
 
 
@@ -226,6 +238,7 @@ void setup() {
   lora.begin(9600);
   Serial.println("RX READY");
   pinMode(13, OUTPUT);
+  pinMode(8, INPUT_PULLUP);
   pinMode(9, INPUT_PULLUP);
 }
 
@@ -238,6 +251,11 @@ void loop() {
   {
     ejection = true;
     sendEmergencyDeploy();
+  }
+  if(digitalRead(8)==LOW)
+  {
+    sound = true;
+    //Serial.println("test");
   }
 
 
