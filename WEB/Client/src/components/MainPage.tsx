@@ -134,12 +134,12 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
 
       }
       if(data.connect == 3) { //커넥트핀 해제
-        toast.success(data.message || "카운트다운 시작");
+        toast.success(data.message || "카운트다운이 시작되었습니다.");
         playLater();
         data.connect = 1;
       }
       if(data.connect == 2) { //커넥트핀 연결
-        toast.success(data.message ||"카운트다운 시작");
+        toast.success(data.message ||"카운트다운이 시작되었습니다.");
         playLater();
         data.connect = 0;
       }
