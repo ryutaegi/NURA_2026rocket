@@ -47,5 +47,27 @@ struct __attribute__((packed)) FlightData {
   uint32_t timeMs;       // B 기준 시간(=millis)
 };
 
+struct JudgeCounters {            //카운터 초기화 위한 구조체
+uint8_t powered  = 0;
+uint8_t motorOver = 0;
+uint8_t apogee   = 0;
+uint8_t descent  = 0;
+};
+enum DeployState : uint8_t {  //서보모터 이넘
+  DEPLOY_IDLE = 0,            // 사출 대기
+  DEPLOY_PUNCH,               // 카트리지 찌르기 (사출 시작)
+  DEPLOY_LOCK,                // 찌른 상태 유지
+  DEPLOY_DONE                 // 사출 완료 (재사출 방지)
+};
+
+
+struct DeployController {
+  DeployState state;  // 현재 사출 단계
+  bool deployed;      // 1회 사출 래치
+};
+
+
+
+
 #endif
 
