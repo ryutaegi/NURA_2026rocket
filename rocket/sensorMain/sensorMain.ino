@@ -4,6 +4,7 @@
 #include <TinyGPSPlus.h>
 #include <SPI.h>
 #include <SD.h>
+#include <EEPROM.h>
 
 #include "lora.h"
 #include "parachute.h"
@@ -12,8 +13,12 @@
 
 #define PIN_CONNECT_DETECT 2
 
-File logFile;
 static const int SD_CS_PIN = 10;
+const int EEPROM_ADDR_IDX = 0;      // EEPROM에 uint16_t 인덱스 저장 주소
+const uint32_t LOG_PERIOD_MS   = 50;    // 20Hz
+const uint32_t FLUSH_PERIOD_MS = 1000;  // 1초
+File logFile;
+
 //커넥트핀 연결을 단 한번만 판단하게함
 bool pinDetached = false;  
 
@@ -281,6 +286,84 @@ void parseAtoB(Stream& link, FlightData& f, uint32_t nowB_ms) {
 static bool g_parachuteDeployed = false; //낙하산 사출 여부
 
 
+// sd
+struct LogHeader {
+  char magic[4];      // "RLG1"
+  uint16_t version;   // 1
+  uint16_t recSize;   // sizeof(FlightData)
+};
+#pragma pack(pop)
+
+// ================== 512B 버퍼링 ==================
+static uint8_t  sdBuf[512];
+static uint16_t sdWp = 0;
+
+void sdLogWrite(const void* data, uint16_t len) {
+  const uint8_t* p = (const uint8_t*)data;
+
+  if (len > sizeof(sdBuf)) { // 안전장치
+    if (sdWp) { logFile.write(sdBuf, sdWp); sdWp = 0; }
+    logFile.write(p, len);
+    return;
+  }
+
+  if (sdWp + len > sizeof(sdBuf)) {
+    logFile.write(sdBuf, sdWp);
+    sdWp = 0;
+  }
+
+  memcpy(&sdBuf[sdWp], p, len);
+  sdWp += len;
+}
+
+void sdLogFlush() {
+  if (sdWp) {
+    logFile.write(sdBuf, sdWp);
+    sdWp = 0;
+  }
+  logFile.flush();
+}
+
+// ================== 부팅마다 새 파일 생성(삭제 없음) ==================
+uint16_t readBootIndex() {
+  uint16_t idx;
+  EEPROM.get(EEPROM_ADDR_IDX, idx);
+  if (idx == 0xFFFF) idx = 0;
+  return idx;
+}
+
+void writeBootIndex(uint16_t idx) {
+  EEPROM.put(EEPROM_ADDR_IDX, idx);
+}
+
+bool openNewLogFile() {
+  uint16_t idx = readBootIndex();
+  char name[13];
+
+  bool found = false;
+  for (uint16_t tries = 0; tries < 10000; tries++) {
+    snprintf(name, sizeof(name), "FL%04u.BIN", idx);
+    if (!SD.exists(name)) { found = true; break; }
+    idx = (idx + 1) % 10000;
+  }
+  if (!found) return false;
+
+  logFile = SD.open(name, FILE_WRITE);
+  if (!logFile) return false;
+
+  writeBootIndex((idx + 1) % 10000);
+
+  LogHeader hdr{{'R','L','G','1'}, 1, (uint16_t)sizeof(FlightData)};
+  logFile.write((uint8_t*)&hdr, sizeof(hdr));
+  logFile.flush();
+
+  Serial.print("LOG FILE: ");
+  Serial.println(name);
+
+  return true;
+}
+
+
 
 void setup() {
 
@@ -304,15 +387,6 @@ void setup() {
   // GPS
   initGps();
 
-  if (!SD.begin(SD_CS_PIN)) {
-    Serial.println("SD init failed!");
-  }
-  logFile = SD.open("flight.bin", FILE_WRITE);
-  if (!logFile) {
-    Serial.println("log file open failed!");
-  }
-
-  Serial.println("SD logging started.");
 
 
   // Baro
@@ -327,6 +401,19 @@ void setup() {
 //낙하산
 
   pinMode(PIN_CONNECT_DETECT, INPUT_PULLUP); //낙하산 커넥트핀 상태 설정
+
+// sd
+if (!SD.begin(SD_CS_PIN)) {
+    Serial.println("SD init failed!");
+    while (1);
+  }
+
+  if (!openNewLogFile()) {
+    Serial.println("log file open failed!");
+    while (1);
+  }
+
+  Serial.println("SD logging started.");
 
 }
 
@@ -367,6 +454,22 @@ void loop() {
 
  updateFlightState(flight, startFlight, powered, motorOver, apogee);
 
+   static uint32_t lastLogMs = 0;
+  static uint32_t lastLog = 0;
+  if (nowMs - lastLog >= LOG_PERIOD_MS) {
+    lastLog = nowMs;
+
+    // memcpy(버퍼로 복사) 동안만 인터럽트 잠깐 막아서 레코드 찢김 방지
+    sdLogWrite((const void*)&flight, (uint16_t)sizeof(FlightData));
+  }
+
+  // 1초마다 flush
+  static uint32_t lastFlush = 0;
+  if (nowMs - lastFlush >= FLUSH_PERIOD_MS) {
+    lastFlush = nowMs;
+    sdLogFlush();
+  }
+
    // 디버그(0.5초마다)
    static uint32_t lastPrint = 0;
    if (nowMs - lastPrint >= 200) {
@@ -389,7 +492,7 @@ void loop() {
      Serial.print(" gz="); Serial.print(flight.imu.gz, 1);
 
      Serial.println();
-
+     Serial.print("pinDetached = ");Serial.print(pinDetached);
      Serial.print(" | Baro Alt="); Serial.print(flight.baro.altitude, 2);
      Serial.print(" Vz="); Serial.print(flight.baro.climbRate, 2);
 
@@ -399,17 +502,7 @@ void loop() {
      Serial.print(" lonE7="); Serial.print(flight.gps.longitudeE7);
      Serial.println();
    }
-   static uint32_t lastLogMs = 0;
-  if (nowMs - lastLogMs >= 50) { // 예: 20Hz 로깅
-    lastLogMs = nowMs;
 
-    logFile.write((uint8_t*)&flight, sizeof(FlightData));
-  }
-  static uint32_t lastFlushMs = 0;
-  if (nowMs - lastFlushMs >= 1000) { // 1초마다만 flush
-    lastFlushMs = nowMs;
-    logFile.flush();
-  }
 
 
 }
