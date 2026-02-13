@@ -8,8 +8,13 @@
 // ======================= LoRa 설정 =======================
 #define LORA_PORT  Serial2
 static const uint32_t LORA_BAUD = 9600;
+<<<<<<< HEAD
 static const uint8_t  LORA_ADDR = 0;            // AT+SEND=1,...
 static const uint32_t LORA_PERIOD_MS = 200;     // 5Hz 송신
+=======
+static const uint8_t  LORA_ADDR = 0;            // AT+SEND=0,...
+static const uint32_t LORA_PERIOD_MS = 500;     //  송신 hz
+>>>>>>> 70a58f3b4aa5d7cfca6498067d2fd8755ce98e36
 
 // ======================= base64 =======================
 static const char b64_tbl[] =
@@ -116,6 +121,34 @@ void sendLoraFromFlight(const FlightData& f, bool parachuteDeployed, uint8_t con
   LORA_PORT.print(payload);
   LORA_PORT.print("\r\n");
   Serial.println("send");
+}
+
+// Serial2(=LORA_PORT)에서 한 줄씩 받아서 +RCV 파싱
+void handleLoraRxCommand() {
+  while (LORA_PORT.available()) {
+    //Serial.println("Serial2 available!");  // ← 이거 추가
+    String line = LORA_PORT.readStringUntil('\n');
+    //Serial.println(line);
+    line.trim();
+    if (!line.startsWith("+RCV=")) continue;
+    Serial.println("입력받음");
+
+    int p1 = line.indexOf(',');
+    int p2 = line.indexOf(',', p1 + 1);
+    int p3 = line.indexOf(',', p2 + 1);
+    if (p1 < 0 || p2 < 0 || p3 < 0) continue;
+
+    String data = line.substring(p2 + 1, p3);
+
+    if (data == "E") {
+      g_parachuteDeployed = true;
+      //emergencyDeploy();
+      Serial.println("receive EEE");
+    }
+    if (data == "C") {
+Serial.println("receive CCC");
+    }
+  }
 }
 
 

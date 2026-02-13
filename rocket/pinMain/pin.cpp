@@ -8,6 +8,9 @@ const uint32_t PRINT_PERIOD_MS = 50;
 const float LPF_K = 0.20f;
 const float MAG_DECLINATION_DEG = 8.6f;
 
+ImuData imuData = {};
+FlightData flightData = {};
+
 const float MAG_BIAS_X = 0.0f;
 const float MAG_BIAS_Y = 0.0f;
 const float MAG_BIAS_Z = 0.0f;
@@ -25,8 +28,7 @@ const float W_LPF_K = 0.15f;
 float ax_f = 0, ay_f = 0, az_f = 0;
 float gx_f = 0, gy_f = 0, gz_f = 0;
 float mx_f = 0, my_f = 0, mz_f = 0;
-ImuData imuData = {};
-FlightData flightData = {};
+
 uint32_t lastPrint = 0;
 
 bool att_inited = false;
@@ -226,19 +228,9 @@ void processIMU()
     float ay = ACC_Y();
     float az = ACC_Z();
 
-    imuData.ax = ax_f;  // 저장소는 m/s^2
-    imuData.ay = ay_f;
-    imuData.az = az_f;
-
-
     float gx = deg2rad(GYR_X_DPS());
     float gy = deg2rad(GYR_Y_DPS());
     float gz = deg2rad(GYR_Z_DPS());
-
-
-    imuData.gx = rad2deg(gx_f);  // 라디안을 도(deg)로 변환
-    imuData.gy = rad2deg(gy_f);
-    imuData.gz = rad2deg(gz_f);
 
     float mx = MAG_X();
     float my = -MAG_Y();
@@ -310,11 +302,24 @@ void processIMU()
     float upy = sinf(roll_est) * cosf(pitch_est);
     float upz = cosf(roll_est) * cosf(pitch_est);
 
+    
+
+    imuData.ax = ax_f;  // 저장소는 m/s^2
+    imuData.ay = ay_f;
+    imuData.az = az_f;
+    
+    imuData.gx = rad2deg(gx_f);  // 라디안을 도(deg)로 변환
+    imuData.gy = rad2deg(gy_f);
+    imuData.gz = rad2deg(gz_f);
+
+   
+
     flightData.imu = imuData;
 
-    flightData.roll = rad2deg(roll_est);
-    flightData.pitch = rad2deg(pitch_est);
-    flightData.yaw = rad2deg(yaw_est);
+
+    // flightData.roll = rad2deg(roll_est);
+    // flightData.pitch = rad2deg(pitch_est);
+    // flightData.yaw = rad2deg(yaw_est);
     flightData.filterRoll = rad2deg(yaw_est);
 
     float alphaAng = 0, betaAng = 0;
@@ -322,17 +327,17 @@ void processIMU()
 
     float gammaAng = yaw_est;
 
+    flightData.roll = rad2deg(alphaAng); //alpha_d
+    flightData.pitch = rad2deg(betaAng); //beta_d
+    flightData.yaw = wrap360(rad2deg(gammaAng)); //gamma_d
+
     uint32_t nowMs = millis();
     if (nowMs - lastPrint >= PRINT_PERIOD_MS) {
         lastPrint = nowMs;
 
-        float alpha_d = rad2deg(alphaAng);
-        float beta_d = rad2deg(betaAng);
-        float gamma_d = wrap360(rad2deg(gammaAng));
-
-        Serial.print(alpha_d, 2); Serial.print(F(","));
-        Serial.print(beta_d, 2);  Serial.print(F(","));
-        Serial.println(gamma_d, 2);
+        Serial.print(flightData.roll, 2); Serial.print(F(","));
+        Serial.print(flightData.pitch, 2);  Serial.print(F(","));
+        Serial.println(flightData.yaw, 2);
         //Serial.print(accMag); Serial.print(F(","));
         //Serial.println(wGyro);
     }

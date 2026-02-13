@@ -21,6 +21,7 @@ File logFile;
 
 //커넥트핀 연결을 단 한번만 판단하게함
 bool pinDetached = false;  
+bool g_parachuteDeployed = false; //낙하산 사출 여부
 
 FlightData flight;
 // 1) BMP280
@@ -283,7 +284,7 @@ void parseAtoB(Stream& link, FlightData& f, uint32_t nowB_ms) {
 }
 
 
-static bool g_parachuteDeployed = false; //낙하산 사출 여부
+
 
 
 // sd
@@ -421,6 +422,10 @@ void loop() {
   uint32_t nowMs = millis();
   flight.timeMs = nowMs;
 
+  handleLoraRxCommand(); // 지상국 명령 수신
+  // if(Serial2.available())
+  //   Serial.println("asdfasdf");
+
   // 1) A2B 패킷은 가능한 자주 파싱
   parseAtoB(Serial3, flight, nowMs);
 
@@ -433,6 +438,7 @@ void loop() {
   // Serial.write(Serial2.read());
   // if(Serial.available())
   // Serial2.write(Serial.read());
+
   sendLoraFromFlight(flight, g_parachuteDeployed, pinDetached);
 
 
@@ -472,7 +478,7 @@ void loop() {
 
    // 디버그(0.5초마다)
    static uint32_t lastPrint = 0;
-   if (nowMs - lastPrint >= 200) {
+   if (nowMs - lastPrint >= 500) {
      lastPrint = nowMs;
 
      uint32_t ageA = (flight.aRxTimeMs == 0) ? 0xFFFFFFFFUL : (nowMs - flight.aRxTimeMs);
@@ -492,7 +498,10 @@ void loop() {
      Serial.print(" gz="); Serial.print(flight.imu.gz, 1);
 
      Serial.println();
-     Serial.print("pinDetached = ");Serial.print(pinDetached);
+
+     Serial.print(" | Connect ="); Serial.print(pinDetached);
+     Serial.print(" parachute ="); Serial.print(g_parachuteDeployed);
+
      Serial.print(" | Baro Alt="); Serial.print(flight.baro.altitude, 2);
      Serial.print(" Vz="); Serial.print(flight.baro.climbRate, 2);
 

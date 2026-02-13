@@ -12,18 +12,18 @@ export default function RocketData({ telemetry }: RocketDataProps) {
       icon: Gauge,
       color: 'text-blue-400',
     },
-    {
-      label: '기압',
-      value: `${telemetry.pressure.toFixed(1)} hPa`,
-      icon: Gauge,
-      color: 'text-purple-400',
-    },
-    {
-      label: '진행방향 속도',
-      value: `${telemetry.speed.toFixed(1)} m/s`,
-      icon: Wind,
-      color: 'text-green-400',
-    },
+    // {
+    //   label: '기압',
+    //   value: `${telemetry.pressure.toFixed(1)} hPa`,
+    //   icon: Gauge,
+    //   color: 'text-purple-400',
+    // },
+    // {
+    //   label: '진행방향 속도',
+    //   value: `${telemetry.speed.toFixed(1)} m/s`,
+    //   icon: Wind,
+    //   color: 'text-green-400',
+    // },
     {
       label: '온도',
       value: `${telemetry.temperature.toFixed(1)} °C`,
@@ -38,9 +38,9 @@ export default function RocketData({ telemetry }: RocketDataProps) {
     },
     {
       label: '낙하산',
-      value: telemetry.parachuteStatus === 1 ? '전개됨' : '미전개',
+      value: telemetry.parachuteStatus > 1 ? '사출됨' : '미사출',
       icon: Cloud, // Cloud 아이콘 사용
-      color: telemetry.parachuteStatus === 1 ? 'text-green-400' : 'text-gray-400',
+      color: telemetry.parachuteStatus > 1 ? 'text-green-400' : 'text-red-400',
     },
     // {
     //   label: '배터리',

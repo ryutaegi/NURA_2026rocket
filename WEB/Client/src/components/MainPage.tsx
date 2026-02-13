@@ -57,9 +57,9 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
     roll: 0,
     yaw: 0,
     stage: 'pre-launch', // 초기값
-    temperature: 22,
-    pressure: 1013,
-    battery: 100,
+    temperature: 0,
+    pressure: 0,
+    battery: 0,
     connect: 0, // 초기값
     parachuteStatus: 0, // 초기값
     flightPhase: 0, // 초기값
@@ -97,6 +97,12 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
     if (lastMessage.type === 'telemetry') {
       // 실시간 텔레메트리 데이터 수신
       const data = lastMessage.data;
+
+      if(data.parachuteStatus == 2)
+      {
+        toast.success(data.message ||'비상 사출 명령을 성공적으로 전송했습니다.');
+        
+      }
       
       setTelemetry({
         latitude: data.latitude,
@@ -111,9 +117,9 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
         temperature: data.temperature,
         pressure: data.pressure,
         battery: data.battery,
-        connect: data.connect, // 새로운 필드
-        parachuteStatus: data.parachuteStatus, // 새로운 필드
-        flightPhase: data.flightPhase, // 새로운 필드
+        connect: data.connect, // 커넥트핀
+        parachuteStatus: data.parachuteStatus, // 낙하산 사출유무
+        flightPhase: data.flightPhase, // 발사 단계
       });
     } else if (lastMessage.type === 'recording_started') {
       console.log('기록 시작됨:', lastMessage.recordingId);
@@ -177,6 +183,8 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
       flightPhase: currentData.flightPhase,
     });
   }, [isReplayMode, replayTime, replayData]);
+
+  
 
   // 이전 determineStage 함수는 더 이상 사용되지 않습니다. (서버의 flightPhase를 사용)
   // const determineStage = (altitude: number): RocketTelemetry['stage'] => {
@@ -275,6 +283,30 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
       }
     //}
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 입력창에서 타이핑 중일 때는 무시하고 싶으면 아래 주석 해제
+      // const tag = (e.target as HTMLElement)?.tagName;
+      // if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  
+      if (!isConnected) return; // 연결 안 되어 있으면 무시
+  
+      if (e.key === 'o') {
+        e.preventDefault();
+        handleCenterAlign();
+      } else if (e.key === 'p') {
+        e.preventDefault();
+        handleEmergencyEject();
+      }
+    };
+  
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isConnected, handleCenterAlign, handleEmergencyEject]);
+  
 
   return (
     <div className="h-[calc(100vh-4rem)] p-4 overflow-hidden flex flex-col">

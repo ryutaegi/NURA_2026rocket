@@ -2,8 +2,7 @@
 
 SoftwareSerial lora(2, 3); // RX, TX
 
-
-
+int ejection = false;
 struct __attribute__((packed)) FlightDataPacket {
   // 시작을 알리는 Sync Byte (1 byte)
   const uint8_t start_byte = 0xAA;
@@ -145,11 +144,16 @@ void handleLoraRx() { // 로켓으로부터의 텔레메트리 수신 함수
 
   packet.lat = read32(raw, idx) / 1e7;
   packet.lon = read32(raw, idx) / 1e7;
-  packet.alt = read16(raw, idx) / 10.0;
+  packet.alt = read16(raw, idx) / 100;
   packet.temp = read16(raw, idx) / 100.0;
 
   packet.connect= raw[idx++];
   packet.phase = raw[idx] / 10;
+  if(ejection==1){
+    packet.para = 2;
+    ejection = false;
+  }
+  else
   packet.para = raw[idx++] % 10;
   packet.pressure = random(500, 1000);   
   packet.speed = random(0, 100); 
@@ -173,7 +177,7 @@ void handleLoraRx() { // 로켓으로부터의 텔레메트리 수신 함수
   // Serial.print(" LON=");  Serial.print(packet.lon, 7);
   // Serial.print(" ALT=");  Serial.print(packet.alt);
   // Serial.print(" TEMP="); Serial.print(packet.temp);
-  // Serial.print(" HUM=");  Serial.print(packet.hum);
+  // Serial.print(" CONNECT=");  Serial.print(packet.connect);
   // Serial.print(" PARA="); Serial.print(packet.para);
   // Serial.print(" PHASE=");Serial.println(packet.phase);
 
@@ -191,24 +195,29 @@ void handleWebCommand() { // 웹으로부터의 명령 처리 함수
   cmd.trim();
 
   if (cmd == "EJECT") {
-    //digitalWrite(13, HIGH);
+    digitalWrite(13, HIGH);
     sendEmergencyDeploy();
   }
   else if(cmd == "CENTER") {
-    //digitalWrite(13, LOW);
+    digitalWrite(13, LOW);
+    sendCenter();
   }
 }
 
 void sendEmergencyDeploy() { // LoRa 비상 사출 송신 함수
-  const char* msg = "E";   // 1바이트(문자 1개) 커맨드
+  for(int i=0; i<10; i++){
+  lora.print("AT+SEND=1,1,E\r\n");
+  delay(50);
+  }
+  Serial.println("[lora] EMERGENCY DEPLOY SENT (\"E\")");
+}
 
-  lora.print("AT+SEND=1,");
-  lora.print(strlen(msg));   // 1
-  lora.print(",");
-  lora.print(msg);
-  lora.print("\r\n");
-
-  Serial.println("[GS] EMERGENCY DEPLOY SENT (\"E\")");
+void sendCenter() { // LoRa 중앙 정렬 송신 함수
+  for(int i=0; i<10; i++){
+  lora.print("AT+SEND=1,1,C\r\n");
+  delay(50);
+  }
+  Serial.println("[lora] CENTER SENT (\"C\")");
 }
 
 
@@ -216,12 +225,26 @@ void setup() {
   Serial.begin(115200);
   lora.begin(9600);
   Serial.println("RX READY");
-  //pinMode(13, OUTPUT);
+  pinMode(13, OUTPUT);
+  pinMode(9, INPUT_PULLUP);
 }
 
 
 void loop() {
   handleLoraRx();
   handleWebCommand();
+  
+  if(digitalRead(9)==LOW)
+  {
+    ejection = true;
+    sendEmergencyDeploy();
+  }
+
+
+
+  // if(Serial.available())
+  // lora.write(Serial.read());
+  // if(lora.available())
+  // Serial.write(lora.read());
   }
 
