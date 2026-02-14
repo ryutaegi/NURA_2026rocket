@@ -502,6 +502,7 @@ void loop() {
   if (!launchTimeStarted && pinDetached) {
     launchTimeStarted = true;
     launchTimeMs = millis();  // T0
+    Serial.println("발사 시간 측정! (여기에 imu도 추가해야 함)");
   }
 
   // ========================센서 이상치 판단==========
@@ -550,7 +551,8 @@ void loop() {
 
     unsigned long flightTimeMs = millis() - launchTimeMs;
 
-    if (flightTimeMs >= 1000000) {  // 10,000ms = 10초
+    if (flightTimeMs >= 10000) {  // 1,000ms = 10초
+      //Serial.println("낙하산 사출! - 10초 조건");
       deployCtl.state = DEPLOY_PUNCH;
       g_parachuteDeployed = true;
     }
