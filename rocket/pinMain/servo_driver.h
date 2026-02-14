@@ -16,7 +16,7 @@ extern const uint16_t SERVO_MIN_US;
 extern const uint16_t SERVO_MAX_US;
 
 // ===== 유틸 =====
-float wrap360_deg(float d);
+float wrap720_deg(float d);
 float fmap(float x, float in_min, float in_max, float out_min, float out_max);
 
 // ===== 서보 =====
@@ -26,4 +26,3 @@ void sweepOnce(void);
 
 // ===== IMU 설정 =====
 bool configureIMU(void);
-

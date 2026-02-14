@@ -1,12 +1,11 @@
 #include "pin.h"
 
 // ======================= IMU 설정 =======================
-ICM_20948_I2C imu;
+ICM_20948_I2C myICM;
 
 // ======================= 사용자 설정 =======================
 const uint32_t PRINT_PERIOD_MS = 50;
 const float LPF_K = 0.20f;
-const float MAG_DECLINATION_DEG = 8.6f;
 
 ImuData imuData = {};
 FlightData flightData = {};
@@ -32,11 +31,14 @@ float mx_f = 0, my_f = 0, mz_f = 0;
 uint32_t lastPrint = 0;
 
 bool att_inited = false;
-float roll_est = 0, pitch_est = 0, yaw_est = 0;
 
 float wGyro_f = 0.0f;
 
 uint32_t lastMicros = 0;
+
+float earth_roll = 0.0f;
+float earth_pitch = 0.0f;
+float earth_yaw = 0.0f;
 
 // ======================= I2C 스캔 함수 =======================
 void scanI2C() {
@@ -79,7 +81,7 @@ bool initializeIMU()
     Serial.print(AD0_VAL);
     Serial.println(")...");
 
-    if (!imu.begin(WIRE_PORT, AD0_VAL)) {
+    if (!myICM.begin(WIRE_PORT, AD0_VAL)) {
         Serial.println("      → 실패! I2C 스캔 결과:");
         scanI2C();
         return false;
@@ -93,128 +95,49 @@ bool initializeIMU()
 static inline float deg2rad(float d) { return d * (PI / 180.0f); }
 static inline float rad2deg(float r) { return r * (180.0f / PI); }
 
-static inline float clampf(float x, float lo, float hi) {
-    if (x < lo) return lo;
-    if (x > hi) return hi;
-    return x;
-}
-static inline float clamp01(float x) { return clampf(x, 0.0f, 1.0f); }
-static inline float clamp02(float x) { return clampf(x, 0.0f, 0.98f); }
-
-static inline float wrapPi(float a) {
-    while (a > PI) a -= 2.0f * PI;
-    while (a < -PI) a += 2.0f * PI;
-    return a;
-}
-
-static inline float wrap360(float deg) {
-    while (deg < 0.0f) deg += 360.0f;
-    while (deg >= 360.0f) deg -= 360.0f;
-    return deg;
-}
-
-static inline float blendAngleRad(float pred, float meas, float wMeas) {
-    float e = wrapPi(meas - pred);
-    return wrapPi(pred + wMeas * e);
-}
-
 // ======================= 축 매핑 =======================
-static inline float ACC_X() { return imu.accX(); }
-static inline float ACC_Y() { return imu.accY(); }
-static inline float ACC_Z() { return imu.accZ(); }
+static inline float ACC_X() { return myICM.accX(); }
+static inline float ACC_Y() { return myICM.accY(); }
+static inline float ACC_Z() { return myICM.accZ(); }
 
-static inline float GYR_X_DPS() { return imu.gyrX(); }
-static inline float GYR_Y_DPS() { return imu.gyrY(); }
-static inline float GYR_Z_DPS() { return imu.gyrZ(); }
+static inline float GYR_X_DPS() { return myICM.gyrX(); }
+static inline float GYR_Y_DPS() { return myICM.gyrY(); }
+static inline float GYR_Z_DPS() { return myICM.gyrZ(); }
 
-static inline float MAG_X() { return imu.magX(); }
-static inline float MAG_Y() { return imu.magY(); }
-static inline float MAG_Z() { return imu.magZ(); }
+static inline float MAG_X() { return myICM.magX(); }
+static inline float MAG_Y() { return myICM.magY(); }
+static inline float MAG_Z() { return myICM.magZ(); }
 
 // ======================= 계산 함수 =======================
-static void computeRollPitchFromAccel(float axn, float ayn, float azn,
-    float& roll, float& pitch)
-{
-    roll = atan2f(ayn, azn);
-    pitch = atan2f(-axn, sqrtf(ayn * ayn + azn * azn));
+void calculateEulerAngles(long q1_raw, long q2_raw, long q3_raw, float& roll, float& pitch, float& yaw) {
+
+    double q1 = ((double)q1_raw) / 1073741824.0;
+    double q2 = ((double)q2_raw) / 1073741824.0;
+    double q3 = ((double)q3_raw) / 1073741824.0;
+    double q0 = sqrt(1.0 - ((q1 * q1) + (q2 * q2) + (q3 * q3)));
+
+    double qw = q0;
+    double qx = q2;
+    double qy = q1;
+    double qz = -q3;
+
+    // Roll
+    double t0 = +2.0 * (qw * qx + qy * qz);
+    double t1 = +1.0 - 2.0 * (qx * qx + qy * qy);
+    roll = atan2(t0, t1) * 180.0 / PI;
+
+    // Pitch
+    double t2 = +2.0 * (qw * qy - qx * qz);
+    t2 = t2 > 1.0 ? 1.0 : t2;
+    t2 = t2 < -1.0 ? -1.0 : t2;
+    pitch = asin(t2) * 180.0 / PI;
+
+    // Yaw
+    double t3 = +2.0 * (qw * qz + qx * qy);
+    double t4 = +1.0 - 2.0 * (qy * qy + qz * qz);
+    yaw = atan2(t3, t4) * 180.0 / PI;
 }
 
-static bool computeYawFromMagTiltComp(float mx, float my, float mz,
-    float roll, float pitch,
-    float& yaw)
-{
-    float mraw[3] = { mx - MAG_BIAS_X, my - MAG_BIAS_Y, mz - MAG_BIAS_Z };
-    float mc[3] = { 0,0,0 };
-    for (int i = 0; i < 3; i++) {
-        mc[i] = MAG_AINV[i][0] * mraw[0] + MAG_AINV[i][1] * mraw[1] + MAG_AINV[i][2] * mraw[2];
-    }
-    float mx_c = mc[0], my_c = mc[1], mz_c = mc[2];
-
-    float mn = sqrtf(mx_c * mx_c + my_c * my_c + mz_c * mz_c);
-    if (mn < 1e-6f) return false;
-
-    float cr = cosf(roll), sr = sinf(roll);
-    float cp = cosf(pitch), sp = sinf(pitch);
-
-    float Xh = mx_c * cp + mz_c * sp;
-    float Yh = mx_c * sr * sp + my_c * cr - mz_c * sr * cp;
-
-    yaw = atan2f(Yh, Xh);
-    yaw += deg2rad(MAG_DECLINATION_DEG);
-    yaw = wrapPi(yaw);
-    return true;
-}
-
-static void computeAlphaBetaFixedXY_fromAccelYawRemoved(float axn, float ayn, float azn,
-    float yaw,
-    float& alpha, float& beta)
-{
-    float cy = cosf(yaw);
-    float sy = sinf(yaw);
-
-    float axp = axn * cy + ayn * sy;
-    float ayp = -axn * sy + ayn * cy;
-    float azp = azn;
-
-    alpha = -asinf(clampf(ayp, -1.0f, 1.0f));
-    beta = atan2f(axp, azp);
-}
-
-static float computeDynamicGyroWeight(float accMag_mg)
-{
-    const float oneG = 1000.0f;
-
-    if (accMag_mg < 200.0f) return 1.0f;
-
-    float dev = fabsf(accMag_mg - oneG);
-
-    const float dead = 30.0f;
-    if (dev < dead) return 0.0f;
-
-    const float full = 300.0f;
-
-    float t = dev / full;
-    if (t > 1.0f) t = 1.0f;
-
-    t = t * t * (3.0f - 2.0f * t);
-
-    return t;
-}
-
-static void eulerRatesFromBodyRates(float p, float q, float r,
-    float roll, float pitch,
-    float& roll_dot, float& pitch_dot, float& yaw_dot)
-{
-    float cr = cosf(roll), sr = sinf(roll);
-    float cp = cosf(pitch);
-    float tp = tanf(pitch);
-
-    if (fabsf(cp) < 1e-3f) cp = (cp >= 0 ? 1e-3f : -1e-3f);
-
-    roll_dot = p + q * sr * tp + r * cr * tp;
-    pitch_dot = q * cr - r * sr;
-    yaw_dot = q * sr / cp + r * cr / cp;
-}
 
 // ======================= 메인 IMU 처리 =======================
 void processIMU()
@@ -248,97 +171,75 @@ void processIMU()
     my_f += LPF_K * (my - my_f);
     mz_f += LPF_K * (mz - mz_f);
 
-    float accMag = sqrtf(ax_f * ax_f + ay_f * ay_f + az_f * az_f);
-    float wGyro = computeDynamicGyroWeight(accMag);
-
-
-    wGyro_f += W_LPF_K * (wGyro - wGyro_f);
-    wGyro_f = clamp01(wGyro_f);
-    wGyro = clamp02(wGyro);
-
-
-    float an = sqrtf(ax_f * ax_f + ay_f * ay_f + az_f * az_f);
-    if (an < 1e-6f) return;
-    float axn = ax_f / an;
-    float ayn = ay_f / an;
-    float azn = az_f / an;
-
-    float roll_acc = 0, pitch_acc = 0;
-    computeRollPitchFromAccel(axn, ayn, azn, roll_acc, pitch_acc);
-
-    if (!att_inited) {
-        roll_est = roll_acc;
-        pitch_est = pitch_acc;
-
-        float yaw0 = 0;
-        bool yaw_ok0 = computeYawFromMagTiltComp(mx_f, my_f, mz_f, roll_est, pitch_est, yaw0);
-        yaw_est = yaw_ok0 ? yaw0 : 0.0f;
-
-        att_inited = true;
-    }
-    else {
-        float roll_dot, pitch_dot, yaw_dot;
-        eulerRatesFromBodyRates(gx_f, gy_f, gz_f, roll_est, pitch_est, roll_dot, pitch_dot, yaw_dot);
-
-        float roll_g = roll_est + roll_dot * dt;
-        float pitch_g = pitch_est + pitch_dot * dt;
-        float yaw_g = wrapPi(yaw_est + yaw_dot * dt);
-
-        roll_est = wGyro_f * roll_g + (1.0f - wGyro_f) * roll_acc;
-        pitch_est = wGyro_f * pitch_g + (1.0f - wGyro_f) * pitch_acc;
-
-        float yaw_mag = 0;
-        bool yaw_ok = computeYawFromMagTiltComp(mx_f, my_f, mz_f, roll_est, pitch_est, yaw_mag);
-
-        if (yaw_ok) {
-            yaw_est = blendAngleRad(yaw_g, yaw_mag, (1.0f - wGyro_f));
-        }
-        else {
-            yaw_est = yaw_g;
-        }
-    }
-
-    float upx = -sinf(pitch_est);
-    float upy = sinf(roll_est) * cosf(pitch_est);
-    float upz = cosf(roll_est) * cosf(pitch_est);
-
-    
-
     imuData.ax = ax_f;  // 저장소는 m/s^2
     imuData.ay = ay_f;
     imuData.az = az_f;
-    
+
     imuData.gx = rad2deg(gx_f);  // 라디안을 도(deg)로 변환
     imuData.gy = rad2deg(gy_f);
     imuData.gz = rad2deg(gz_f);
 
-   
+    icm_20948_DMP_data_t data;
+    myICM.readDMPdataFromFIFO(&data);
+
+    if ((myICM.status == ICM_20948_Stat_Ok) || (myICM.status == ICM_20948_Stat_FIFOMoreDataAvail))
+    {
+        // --------------------------------------------------
+        // 1. 6축 데이터 (Game Rotation Vector)
+        // --------------------------------------------------
+        if ((data.header & DMP_header_bitmap_Quat6) > 0)
+        {
+            calculateEulerAngles(
+                data.Quat6.Data.Q1,
+                data.Quat6.Data.Q2,
+                data.Quat6.Data.Q3,
+                earth_roll,
+                earth_pitch,
+                earth_yaw
+            );
+
+            flightData.filterRoll = earth_yaw;
+           
+        }
+
+        // --------------------------------------------------
+        // 2. 9축 데이터 (Rotation Vector) -> flightData에 저장
+        // --------------------------------------------------
+        if ((data.header & DMP_header_bitmap_Quat9) > 0)
+        {
+           
+            calculateEulerAngles(
+                data.Quat9.Data.Q1,
+                data.Quat9.Data.Q2,
+                data.Quat9.Data.Q3,
+                earth_roll,
+                earth_pitch,
+                earth_yaw
+            );
+
+            flightData.roll = earth_roll;
+            flightData.pitch = earth_pitch;
+            flightData.yaw = earth_yaw;
+           
+        }
+    }
+
+    if (myICM.status != ICM_20948_Stat_FIFOMoreDataAvail)
+    {
+        delay(10);
+    }
 
     flightData.imu = imuData;
 
-
-    // flightData.roll = rad2deg(roll_est);
-    // flightData.pitch = rad2deg(pitch_est);
-    // flightData.yaw = rad2deg(yaw_est);
-    flightData.filterRoll = rad2deg(yaw_est);
-
-    float alphaAng = 0, betaAng = 0;
-    computeAlphaBetaFixedXY_fromAccelYawRemoved(upx, upy, upz, yaw_est, alphaAng, betaAng);
-
-    float gammaAng = yaw_est;
-
-    flightData.roll = rad2deg(alphaAng); //alpha_d
-    flightData.pitch = rad2deg(betaAng); //beta_d
-    flightData.yaw = wrap360(rad2deg(gammaAng)); //gamma_d
 
     uint32_t nowMs = millis();
     if (nowMs - lastPrint >= PRINT_PERIOD_MS) {
         lastPrint = nowMs;
 
-        Serial.print(flightData.roll, 2); Serial.print(F(","));
-        Serial.print(flightData.pitch, 2);  Serial.print(F(","));
-        Serial.println(flightData.yaw, 2);
-        //Serial.print(accMag); Serial.print(F(","));
+        Serial.print(flightData.roll, 2); Serial.print(F("//"));
+        Serial.print(flightData.pitch, 2);  Serial.print(F("//"));
+        Serial.print(flightData.yaw, 2); Serial.print(F("//"));
+        Serial.println(flightData.filterRoll,2); 
         //Serial.println(wGyro);
     }
 }

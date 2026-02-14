@@ -9,7 +9,7 @@
 
 // [Spike Filter 변수]
 static int      spikeCounter = 0;
-static const int MAX_SPIKE_COUNT = 10; // n회 이상 튀면 FLT_MAX 처리
+static const int MAX_SPIKE_COUNT = 4; // n회 이상 튀면 FLT_MAX 처리
 
 // 각 축별 임계값
 static const float ACCEL_AXIS_LIMIT = 15500.0f; //15.5g
@@ -28,8 +28,8 @@ static const uint8_t  MOTOR_CH2   = 1;
 static const uint16_t SERVO_MIN_US = 500;
 static const uint16_t SERVO_MAX_US = 2500;
 
-static const float    SERVO_NEUTRAL_DEG1 = 56.0f;  //검정핀
-static const float    SERVO_NEUTRAL_DEG2 = 96.0f;  //흰색핀
+static const float    SERVO_NEUTRAL_DEG1 = 65.0f;  //검정핀
+static const float    SERVO_NEUTRAL_DEG2 = 104.0f;  //흰색핀
 
 // [설정] 서보 물리적 제한 각도
 static const float    MAX_SERVO_LIMIT = 90.0f; 
@@ -38,6 +38,10 @@ static const float    MAX_SERVO_LIMIT = 90.0f;
 static const float    PID_OUTPUT_MAX  = 90.0f;
 
 static const float MOTOR_DIR = +1.0f;
+
+// 1. 단축 거리 추가 (static 변수 loop() 맨 위)
+static float prev_yaw = 0.0f;
+
 
 // ======================= 발사 감지 설정 =======================
 
@@ -149,7 +153,7 @@ void setup() {
   WIRE_PORT.begin();
   WIRE_PORT.setClock(400000);
   // 선이 빠졌을 때 Arduino가 멈추지 않게 함
-   Wire.setWireTimeout(3000, true); 
+  Wire.setWireTimeout(3000, true); 
 
   pca9685.begin();
   pca9685.setPWMFreq(PCA_FREQ_HZ);
@@ -180,9 +184,24 @@ void setup() {
       lastImuDataMs = millis();
     } else {
       Serial.print(F("IMU init failed: "));
-      Serial.println(imu.statusString());
+      Serial.println(myICM.statusString());
       delay(500);
     }
+    bool success = true;
+  success &= (myICM.initializeDMP() == ICM_20948_Stat_Ok);
+
+  success &= (myICM.enableDMPSensor(INV_ICM20948_SENSOR_GAME_ROTATION_VECTOR) == ICM_20948_Stat_Ok);
+  success &= (myICM.enableDMPSensor(INV_ICM20948_SENSOR_ROTATION_VECTOR) == ICM_20948_Stat_Ok);
+ 
+  success &= (myICM.setDMPODRrate(DMP_ODR_Reg_Quat6, 0) == ICM_20948_Stat_Ok); // 6축 데이터 속도
+  success &= (myICM.setDMPODRrate(DMP_ODR_Reg_Quat9, 0) == ICM_20948_Stat_Ok); // 9축 데이터 속도
+ 
+  success &= (myICM.setDMPODRrate(DMP_ODR_Reg_Cpass, 0) == ICM_20948_Stat_Ok);
+  
+  success &= (myICM.enableFIFO() == ICM_20948_Stat_Ok);
+  success &= (myICM.enableDMP() == ICM_20948_Stat_Ok);
+  success &= (myICM.resetDMP() == ICM_20948_Stat_Ok);
+  success &= (myICM.resetFIFO() == ICM_20948_Stat_Ok);
   }
 
   lastMicros = micros();
@@ -199,8 +218,8 @@ void loop() {
   
   // 1. 데이터 읽기 시도
   bool dataAvailable = false;
-  if (imu.dataReady()) {
-    imu.getAGMT();
+  if (myICM.dataReady()) {
+    myICM.getAGMT();
     dataAvailable = true;
     lastImuDataMs = millis();
     
@@ -213,6 +232,7 @@ void loop() {
   }
   // 센서고장판단
      if (millis() - lastImuDataMs > 3000){
+        flightData.filterRoll = 0;
         flightData.imu.ax = 10000; 
         flightData.imu.ay = 10000;
         flightData.imu.az = 10000;
@@ -224,6 +244,7 @@ void loop() {
   // 4. 센서가 비정상일 때 복구 시도
   if (!isImuHealthy) {
     // 안전을 위해 서보 중립
+    flightData.filterRoll = 0;
     writeServoDeg(MOTOR_CH1, SERVO_NEUTRAL_DEG1);
     writeServoDeg(MOTOR_CH2, SERVO_NEUTRAL_DEG2);
    
@@ -231,10 +252,11 @@ void loop() {
     if (millis() - lastResetAttemptMs > 500) {
       lastResetAttemptMs = millis();
       Serial.println(F("연결 끊김"));
-      
+      flightData.filterRoll = 0;
       // Wire 버스 리셋 시도 (선이 다시 꽂혔을 때를 대비)
-       Wire.end(); // 일부 라이브러리/보드에서 필요할 수 있음
-       Wire.begin();
+        // 일부 라이브러리/보드에서 필요할 수 있음
+       WIRE_PORT.end();
+       WIRE_PORT.begin();
        WIRE_PORT.setClock(400000);
 
       if (configureIMU()) {
@@ -259,14 +281,14 @@ void loop() {
 
     processIMU();  // 상보필터 업데이트
 
-    bool isSpike = (abs(imu.accX()) > ACCEL_AXIS_LIMIT) || (abs(imu.accY()) > ACCEL_AXIS_LIMIT) || (abs(imu.accZ()) > ACCEL_AXIS_LIMIT);
+    bool isSpike = (abs(myICM.accX()) > ACCEL_AXIS_LIMIT) || (abs(myICM.accY()) > ACCEL_AXIS_LIMIT) || (abs(myICM.accZ()) > ACCEL_AXIS_LIMIT);
 
       if (isSpike) {
         spikeCounter++;
         
         if (spikeCounter >= MAX_SPIKE_COUNT) {
           // [10회 이상 연속] -> 센서 고장으로 판단, 값을 100로 설정
-
+            flightData.filterRoll = 0;
             writeServoDeg(MOTOR_CH1, SERVO_NEUTRAL_DEG1);
             writeServoDeg(MOTOR_CH2, SERVO_NEUTRAL_DEG2);
           
@@ -282,9 +304,7 @@ void loop() {
 
     static float last_yaw_deg = 0.0f;
 
-    // ================= 1. 발사 감지 로직 =================
-
-
+  
     // ================= 2. 비행 중 제어 로직 =================
 
     uint32_t nowUs = micros();
@@ -301,44 +321,50 @@ void loop() {
     float target_dps = 0.0f;
     float error = (target_dps - gyroZ_dps);
 
-    // (옵션) Yaw 각도 변화량에 따른 데드존
-    float yaw_deg = wrap360_deg(rad2deg(yaw_est));
-    float yaw_change = yaw_deg - last_yaw_deg;
-    if (yaw_change > 180.0f) yaw_change -= 360.0f;
-    if (yaw_change < -180.0f) yaw_change += 360.0f;
-    last_yaw_deg = yaw_deg;
-
-    const float DEAD_ZONE_DEG = 0.99f;
-    if (fabsf(yaw_change) < DEAD_ZONE_DEG) {
-      error = 0.0f; 
-    }
 
     // PID 계산
     float pidOut = pid.compute(error, dt);
 
-    // 맵핑 계산 (전체 출력 -> ±10도)  -> 여기부터 서보각도 수정해야함
-    float targetMin1 = SERVO_NEUTRAL_DEG1 - MAX_SERVO_LIMIT; // 80.0
-    float targetMax1 = SERVO_NEUTRAL_DEG1 + MAX_SERVO_LIMIT; // 100.0
 
-    float targetMin2 = SERVO_NEUTRAL_DEG2 - MAX_SERVO_LIMIT; // 80.0
-    float targetMax2 = SERVO_NEUTRAL_DEG2 + MAX_SERVO_LIMIT; // 100.0
+    // yaw를 -180~180 범위로 정규화
+  float yaw_deg = wrap720_deg(flightData.filterRoll);  // 0~360
+  if (yaw_deg > 360.0f) yaw_deg -= 720.0f;  // -180~180 변환
+  
+  float diff = yaw_deg - prev_yaw;
+  if (diff > 180.0f) yaw_deg -= 360.0f;    // 179° → -179°일 때 -181° → 181°로
+  else if (diff < -180.0f) yaw_deg += 360.0f;  // 반대 경우 +360°
 
-    float servoDeg1 = fmap(pidOut * MOTOR_DIR, -PID_OUTPUT_MAX, PID_OUTPUT_MAX, targetMin1, targetMax1);
-    float servoDeg2 = fmap(pidOut * MOTOR_DIR, -PID_OUTPUT_MAX, PID_OUTPUT_MAX, targetMin2, targetMax2);
+  prev_yaw = yaw_deg; 
 
-    // 최종 안전 범위 clamp
-    if (servoDeg1 < targetMin1) servoDeg1 = targetMin1;
-    if (servoDeg1 > targetMax1) servoDeg1 = targetMax1;
+    float servoOffset1, servoOffset2;
+ if (yaw_deg <= 0.0f) {
+    // -180 ~ 0 → -10 ~ 0
+    servoOffset1 = fmap(yaw_deg, -360.0f, 0.0f, -MAX_SERVO_LIMIT, 0.0f);
+    servoOffset2 = servoOffset1;  // 반대 방향 보정
+  } else {
+    // 0 ~ 180 → 0 ~ +10
+    servoOffset1 = fmap(yaw_deg, 0.0f, 360.0f, 0.0f, MAX_SERVO_LIMIT);
+    servoOffset2 = servoOffset1;  // 반대 방향 보정
+  }
+  
+  // 최종 서보 각도 계산 및 클램프
+  float servoDeg1 = SERVO_NEUTRAL_DEG1 + servoOffset1;
+  float servoDeg2 = SERVO_NEUTRAL_DEG2 + servoOffset2;
+ 
+  
+  // 안전 범위 제한 (±10° 고정)
+  servoDeg1 = constrain(servoDeg1, SERVO_NEUTRAL_DEG1 - MAX_SERVO_LIMIT, SERVO_NEUTRAL_DEG1 + MAX_SERVO_LIMIT);
+  servoDeg2 = constrain(servoDeg2, SERVO_NEUTRAL_DEG2 - MAX_SERVO_LIMIT, SERVO_NEUTRAL_DEG2 + MAX_SERVO_LIMIT);
+  
+  // 서보 출력
+  writeServoDeg(MOTOR_CH1, servoDeg1);
+  writeServoDeg(MOTOR_CH2, servoDeg2);
+  
+  // 디버그 출력
+  Serial.print("Yaw: "); Serial.print(yaw_deg, 1);
+  Serial.print(" Servo1: "); Serial.print(servoDeg1, 1);
+  Serial.print(" Servo2: "); Serial.println(servoDeg2, 1);
 
-    if (servoDeg2 < targetMin2) servoDeg2 = targetMin2;
-    if (servoDeg2 > targetMax2) servoDeg2 = targetMax2;
-
-    flightData.servoDegree = servoDeg1; 
-    flightData.servoDegree = servoDeg2; 
-
-    // 모터 출력
-    writeServoDeg(MOTOR_CH1, servoDeg1);
-    writeServoDeg(MOTOR_CH2, servoDeg2);
   }
 
 

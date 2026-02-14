@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <Adafruit_PWMServoDriver.h>
 #include "pin.h"
+#include "servo_driver.h"
 
 // ======================= 유틸 =======================
 uint16_t usToTicks(uint16_t us){
@@ -20,9 +21,9 @@ void writeServoDeg(uint8_t ch, float deg){
   pca9685.setPWM(ch, 0, ticks);
 }
 
-float wrap360_deg(float d){
-  while (d < 0.0f) d += 360.0f;
-  while (d >= 360.0f) d -= 360.0f;
+float wrap720_deg(float d){
+  while (d < 0.0f) d += 720.0f;
+  while (d >= 720.0f) d -= 720.0f;
   return d;
 }
 
@@ -72,23 +73,37 @@ void sweepOnce()
 
 // [추가 기능] IMU 설정 로직을 함수로 분리 (Setup과 Loop에서 재사용하기 위해)
 bool configureIMU() {
-  imu.begin(WIRE_PORT, AD0_VAL);
-  if (imu.status != ICM_20948_Stat_Ok) {
+  myICM.begin(WIRE_PORT, AD0_VAL);
+  if (myICM.status != ICM_20948_Stat_Ok) {
     return false;
   }
   
-  imu.startupMagnetometer();
+  myICM.startupMagnetometer();
 
   ICM_20948_fss_t myFSS; 
   myFSS.a = gpm16;       
   myFSS.g = dps2000;    
-  imu.setFullScale((ICM_20948_Internal_Acc | ICM_20948_Internal_Gyr), myFSS);
+  myICM.setFullScale((ICM_20948_Internal_Acc | ICM_20948_Internal_Gyr), myFSS);
 
   ICM_20948_dlpcfg_t myDLPF;   
   myDLPF.a = (ICM_20948_ACCEL_CONFIG_DLPCFG_e)6;   
   myDLPF.g = (ICM_20948_GYRO_CONFIG_1_DLPCFG_e)6;  
-  imu.enableDLPF(ICM_20948_Internal_Acc | ICM_20948_Internal_Gyr, true);
-  imu.setDLPFcfg(ICM_20948_Internal_Acc | ICM_20948_Internal_Gyr, myDLPF);
-  
+  myICM.enableDLPF(ICM_20948_Internal_Acc | ICM_20948_Internal_Gyr, true);
+  myICM.setDLPFcfg(ICM_20948_Internal_Acc | ICM_20948_Internal_Gyr, myDLPF);
+  bool success = true;
+  success &= (myICM.initializeDMP() == ICM_20948_Stat_Ok);
+
+  success &= (myICM.enableDMPSensor(INV_ICM20948_SENSOR_GAME_ROTATION_VECTOR) == ICM_20948_Stat_Ok);
+  success &= (myICM.enableDMPSensor(INV_ICM20948_SENSOR_ROTATION_VECTOR) == ICM_20948_Stat_Ok);
+
+  success &= (myICM.setDMPODRrate(DMP_ODR_Reg_Quat6, 0) == ICM_20948_Stat_Ok); // 6축 데이터 속도
+  success &= (myICM.setDMPODRrate(DMP_ODR_Reg_Quat9, 0) == ICM_20948_Stat_Ok); // 9축 데이터 속도
+
+  success &= (myICM.setDMPODRrate(DMP_ODR_Reg_Cpass, 0) == ICM_20948_Stat_Ok);
+
+  success &= (myICM.enableFIFO() == ICM_20948_Stat_Ok);
+  success &= (myICM.enableDMP() == ICM_20948_Stat_Ok);
+  success &= (myICM.resetDMP() == ICM_20948_Stat_Ok);
+  success &= (myICM.resetFIFO() == ICM_20948_Stat_Ok);
   return true;
 }
