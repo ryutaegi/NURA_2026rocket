@@ -41,8 +41,6 @@ bool isMotorOver(bool isPoweredNow, JudgeCounters& jc);  //카운터 초기화 �
 bool isApogee(bool altitudeUp, JudgeCounters& jc);  //상태 진입 시 카운터 초기화
 
 
-bool isDescent(bool accelOver, bool altitudeDown, JudgeCounters& jc);
-
 
 
 

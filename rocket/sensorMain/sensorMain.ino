@@ -505,7 +505,7 @@ void loop() {
       && ((flight.imu.ax) * (flight.imu.ax) +
          (flight.imu.ay) * (flight.imu.ay) + 
          (flight.imu.az) * (flight.imu.az) >  
-         (9.8 * 1.5) * (9.8 * 1.5))) { //이거 나중에 수정해야 함
+         (9.8 * 1.2) * (9.8 * 1.2))) { //이거 나중에 수정해야 함
     launchTimeStarted = true;
     launchTimeMs = millis();  // T0
     Serial.println("발사 시간 측정!");
@@ -519,6 +519,7 @@ void loop() {
   // 2) ⛔ 센서 고장 시 APOGEE 강제 전이 (여기!)
   if ((imuOMG || baroOMG) && flight.state < APOGEE) {
     flight.state = APOGEE;
+    Serial.println("센서 고장");
 
     // 중요: 하강 판단 누적값 리셋(권장)
     resetDecisionCounters(jc);
@@ -530,21 +531,17 @@ void loop() {
 
   bool altitudeUp = (!baroOMG) && isAltitudeUp(flight.baro);      // 상승 증거
   bool altitudeDown = (!baroOMG) && isAltitudeDown(flight.baro);  // 하강 증거
-  bool startFlight = isStartFlight(pinDetached, accelOver);
-
   bool powered = isPowered(accelOver, altitudeUp, jc);
   bool motorOver = isMotorOver(powered, jc);
-  bool apogee = (flight.state < APOGEE) && isApogee(altitudeUp, jc);
-  bool descentRaw = isDescent(accelOver, altitudeDown, jc);
-  bool descent = (flight.state == APOGEE) ? descentRaw : false;
-
+  bool apogee = (flight.state < APOGEE) && altitudeUp;
+  bool descent = (flight.state == APOGEE) && altitudeDown;
   // ========================
 
   // 4) 상태머신 갱신
 
   updateFlightState(
     flight,
-    startFlight,
+    launchTimeStarted,
     powered,
     motorOver,
     apogee,
@@ -553,39 +550,41 @@ void loop() {
 
   /*===================== 낙하산 사출 함수=================
       1. 발사 10초 뒤 낙하산 사출
-      2. 하강 20회 시 낙하산 사출
+      2. 하강 30회 시 낙하산 사출(데이터 중복 가능성)
       =================================================*/
 
   if (launchTimeStarted && !deployCtl.deployed) {
     bool isCount = false;
     unsigned long flightTimeMs = millis() - launchTimeMs;
 
-    if (flightTimeMs >= 10000 && !g_parachuteDeployed) {  // 1,000ms = 10초
+    if (flightTimeMs >= 1000000 && !g_parachuteDeployed) {  // 1,000ms = 10초
       Serial.println("낙하산 사출! - 10초 조건");
       deployCtl.state = DEPLOY_PUNCH;
       g_parachuteDeployed = true;
     }
-    if(prevClimbRate !=  flight.baro.climbRate) {
-    if(flight.baro.climbRate < 0) //하강 시 카운트 +1
-      jc.count++;
-    else{
-      if(jc.count > 0) //상승중이면 count가 0이상일 때만 count 1 감소
-      jc.count--;
-    }
-    prevClimbRate = flight.baro.climbRate;
-    }
 
-    if(jc.count > 20 && !g_parachuteDeployed ){ //낙하산 사출
+    if(descent)
+    {
       deployCtl.state = DEPLOY_PUNCH;
       g_parachuteDeployed = true;
       Serial.println("낙하산 사출! - 고도 하강");
-      }
-      // Serial.print(flight.baro.altitude);
-      // Serial.print(",");
-      // Serial.println(flight.baro.climbRate);
-      //Serial.println(jc.count);
-      // if(!g_parachuteDeployed)
-      // Serial.println(jc.count);
+    }
+    // if(prevClimbRate !=  flight.baro.climbRate) {
+    // if(flight.baro.climbRate < -2) //하강 시 카운트 +1
+    //   jc.count++;
+    // else{
+    //   if(jc.count > 0) //상승중이면 count가 0이상일 때만 count 1 감소
+    //   jc.count--;
+    // }
+    // prevClimbRate = flight.baro.climbRate;
+    // }
+
+    // if(jc.count > 20 && !g_parachuteDeployed ){ //낙하산 사출
+    //   deployCtl.state = DEPLOY_PUNCH;
+    //   g_parachuteDeployed = true;
+    //   Serial.println("낙하산 사출! - 고도 하강");
+    //   }
+
   }
 
 

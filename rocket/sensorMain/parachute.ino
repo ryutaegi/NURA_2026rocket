@@ -20,9 +20,6 @@ void resetDecisionCounters(JudgeCounters& jc)  // 이상치 발견 시 상태 �
   jc.descent = 0;
 }
 
-
-
-// // ========================
 bool isConnectOrDeteached(int connectPin)  //분리되면 참으로 판단
 {
   // LOW -> 연결됨
@@ -32,49 +29,52 @@ bool isConnectOrDeteached(int connectPin)  //분리되면 참으로 판단
 
 bool isAccelOver(const ImuData& imu) {  //제곱값 비교로 바꿈
   const float G = 9.81;
-  const float THRESHOLD_SQ = (10.5f * G) * (10.5f * G);  //임계값은 적절하게 조정하기
+  const float THRESHOLD_SQ = (1.2 * G) * (1.2 * G);  //임계값은 적절하게 조정하기
   float magSq = imu.ax * imu.ax + imu.ay * imu.ay + imu.az * imu.az;
   return magSq >= THRESHOLD_SQ;
 }
 
 bool isAltitudeUp(const BaroData& baro) {
-  static float prev = 0.0f;
-  static bool first = true;
+  static int countU = 0;
+  static float prevU = 0;
 
-  // 데드존 (미터 단위)
-  const float EPSILON = 0.2f;  // 20cm, 필요 시 조정
-
-  if (first) {
-    prev = baro.altitude;  // 최초 고도 저장
-    first = false;
-    return false;  // 첫 값은 판단 안 함
-  }
-
-  bool up = (baro.altitude > prev + EPSILON);
-  prev = baro.altitude;
-  return up;
+  if(prevU !=  flight.baro.climbRate && launchTimeStarted) {
+    // Serial.print(flight.baro.climbRate);
+    // Serial.print(" ");
+    // Serial.println(prevU);
+    if(flight.baro.climbRate > 0) //상승 시 카운트 +1
+      {countU++;
+      //Serial.println(countU);
+      }
+    else{
+      if(countU > 0) //하락중이면 count가 0이상일 때만 count 1 감소
+      countU--;
+    }
+    prevU = flight.baro.climbRate;
+    }
+  if(countU > 10)
+  return true;
+  else
+  return false;
 }
 
 bool isAltitudeDown(const BaroData& baro) {
-  static float prev = 0.0f;
-  static bool first = true;
+  static float prevD = 0.0f;
+  static int countD = 0;
 
-  // 데드존 (미터 단위)
-  const float EPSILON = 0.2f;  // isAltitudeUp과 동일하게 유지 권장
-
-  if (first) {
-    prev = baro.altitude;  // 최초 고도 저장
-    first = false;
-    return false;  // 첫 값은 판단 안 함
-  }
-
-  bool down = (baro.altitude < prev - EPSILON);
-  prev = baro.altitude;
-  return down;
-}
-
-bool isStartFlight(bool pinDetached, bool accelOver) {  //발사판단함수
-  return pinDetached && accelOver;                      //판단조건: 커넥트핀분리 &가속도 임계값 초과
+  if(prevD !=  flight.baro.climbRate && launchTimeStarted) {
+    if(flight.baro.climbRate < 0) //하강 시 카운트 +1
+      countD++;
+    else{
+      if(countD > 0) //하락중이면 count가 0이상일 때만 count 1 감소
+      countD--;
+    }
+    prevD = flight.baro.climbRate;
+    }
+  if(countD > 20)
+  return true;
+  else
+  return false;
 }
 
 bool isPowered(bool accelOver, bool altitudeUp, JudgeCounters& jc)  //카운터 초기화 기능 추가
@@ -102,38 +102,6 @@ bool isMotorOver(bool isPoweredNow, JudgeCounters& jc)  //카운터 초기화 �
 
   return jc.motorOver >= THRESHOLD;
 }
-
-bool isApogee(bool altitudeUp, JudgeCounters& jc)  //상태 진입 시 카운터 초기화
-{
-  const uint8_t THRESHOLD = 10;
-
-  if (!altitudeUp) {
-    if (jc.apogee < THRESHOLD) jc.apogee++;
-  } else {
-    jc.apogee = 0;
-  }
-
-  return jc.apogee >= THRESHOLD;
-}
-
-bool isDescent(bool accelOver, bool altitudeDown, JudgeCounters& jc) {
-  const uint8_t THRESHOLD = 10;
-
-  bool cond = altitudeDown || !accelOver;
-
-  if (cond) {
-    if (jc.descent < THRESHOLD) jc.descent++;
-  } else {
-    jc.descent = 0;
-  }
-
-  return jc.descent >= THRESHOLD;
-}
-
-//=================낙하산 사출 함수===================//
-
-
-
 
 
 
