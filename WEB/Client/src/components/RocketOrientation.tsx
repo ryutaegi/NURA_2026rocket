@@ -136,10 +136,11 @@ export default function RocketOrientation({ telemetry }: RocketOrientationProps)
   // 로켓 회전 업데이트
   useEffect(() => {
     if (rocketRef.current) {
+      rocketRef.current.rotation.order = 'ZYX';
       // Pitch (X축), Roll (Z축), Yaw (Y축)
-      rocketRef.current.rotation.x = (telemetry.pitch * Math.PI) / 180;
+      rocketRef.current.rotation.x = -(telemetry.pitch * Math.PI) / 180;
       rocketRef.current.rotation.z = (telemetry.roll * Math.PI) / 180;
-      rocketRef.current.rotation.y = (telemetry.yaw * Math.PI) / 180;
+      rocketRef.current.rotation.y = -(telemetry.yaw * Math.PI) / 180;
     }
   }, [telemetry.pitch, telemetry.roll, telemetry.yaw]);
 
@@ -151,35 +152,37 @@ export default function RocketOrientation({ telemetry }: RocketOrientationProps)
       <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-sm text-white px-4 py-3 rounded-lg space-y-1">
         <div className="text-xs text-gray-400 mb-2">로켓 자세 (Three.js)</div>
         <div className="grid grid-cols-3 gap-4 text-sm">
-          <div>
-            <div className="text-xs text-gray-400">Pitch</div>
-            <div className="text-blue-400">{telemetry.pitch.toFixed(1)}°</div>
+        <div>
+            <div className="text-xs text-gray-400">Roll</div>
+            <div className="text-blue-400">{telemetry.roll.toFixed(1)}°</div>
           </div>
           <div>
-            <div className="text-xs text-gray-400">Roll</div>
-            <div className="text-green-400">{telemetry.roll.toFixed(1)}°</div>
+            <div className="text-xs text-gray-400">Pitch</div>
+            <div className="text-red-400">{telemetry.pitch.toFixed(1)}°</div>
           </div>
           <div>
             <div className="text-xs text-gray-400">Yaw</div>
-            <div className="text-red-400">{telemetry.yaw.toFixed(1)}°</div>
+            <div className="text-green-400">{telemetry.yaw.toFixed(1)}°</div>
           </div>
         </div>
       </div>
 
       {/* 좌표축 라벨 */}
       <div className="absolute bottom-4 right-4 bg-black/70 backdrop-blur-sm text-white px-4 py-3 rounded-lg text-xs">
+      <div className="flex items-center gap-2 mb-1">
+          <div className="w-4 h-0.5 bg-blue-500" />
+          <span>X (roll)</span>
+        </div>
+
         <div className="flex items-center gap-2 mb-1">
           <div className="w-4 h-0.5 bg-red-500" />
-          <span>X (Pitch)</span>
-        </div>
-        <div className="flex items-center gap-2 mb-1">
-          <div className="w-4 h-0.5 bg-green-500" />
-          <span>Y (Yaw)</span>
+          <span>Y (Pitch)</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-0.5 bg-blue-500" />
-          <span>Z (Roll)</span>
+          <div className="w-4 h-0.5 bg-green-500" />
+          <span>Z (Yaw)</span>
         </div>
+        
       </div>
     </div>
   );
