@@ -552,6 +552,7 @@ void loop() {
 
     if (flightTimeMs >= 1000000) {  // 10,000ms = 10초
       deployCtl.state = DEPLOY_PUNCH;
+      g_parachuteDeployed = true;
     }
   }
 
