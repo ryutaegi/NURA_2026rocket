@@ -170,7 +170,7 @@ let recordedData = [];
 
 // 시리얼 포트 설정 (아두이노 연결)
 // COM 포트는 환경에 맞게 수정 필요 (예: Windows - 'COM3', macOS/Linux - '/dev/tty.usbserial-XXXX')
-const SERIAL_PORT = '/dev/tty.usbserial-120'; // 실제 포트로 변경하세요
+const SERIAL_PORT = '/dev/tty.usbserial-130'; // 실제 포트로 변경하세요
 const BAUD_RATE = 115200; // 아두이노와 동일하게 설정
 
 let serialPort;
