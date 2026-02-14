@@ -137,6 +137,7 @@ void handleLoraRxCommand() {
 
     if (data == "E") {
       g_parachuteDeployed = true;
+      deployCtl.state = DEPLOY_PUNCH;
       //emergencyDeploy();
       Serial.println("receive EEE");
     }

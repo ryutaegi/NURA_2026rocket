@@ -21,6 +21,7 @@ const uint32_t FLUSH_PERIOD_MS = 1000;  // 1초
 File logFile;
 
 JudgeCounters jc;
+float prevClimbRate = 0;
 
 Servo deployServo;
 DeployController deployCtl;
@@ -94,6 +95,7 @@ void updateBaro(FlightData& f, uint32_t nowMs) {
   if (nowMs - g_baro_lastMs < BARO_PERIOD_MS) return;  // 주기 유지(20Hz)
   g_baro_lastMs = nowMs;                               // 마지막 실행시간 갱신
 
+  prevClimbRate = f.baro.climbRate;
   float tempC = bmp.readTemperature();
   float press_hPa = bmp.readPressure() / 100.0f;
   if (!isValidPressure_hPa(press_hPa)) return;  // 이상치 스킵
@@ -464,7 +466,7 @@ void setup() {
   initParachuteDeploy();                      //서보모터 초기화
 
   flight.state = STANDBY;
-  jc = {};
+  //jc = {};
 }
 
 void loop() {
@@ -498,11 +500,15 @@ void loop() {
   // ========================
   // // 4. 판단 및 상태 전이
   // // ========================
-  // ==============시간 측정 시작(커넥트핀 분리 시 측정 시작)==========
-  if (!launchTimeStarted && pinDetached) {
+  // ==============시간 측정 시작(커넥트핀 분리 && imu 가속도값)==========
+  if (!launchTimeStarted && pinDetached 
+      && ((flight.imu.ax) * (flight.imu.ax) +
+         (flight.imu.ay) * (flight.imu.ay) + 
+         (flight.imu.az) * (flight.imu.az) >  
+         (9.8 * 1.5) * (9.8 * 1.5))) { //이거 나중에 수정해야 함
     launchTimeStarted = true;
     launchTimeMs = millis();  // T0
-    Serial.println("발사 시간 측정! (여기에 imu도 추가해야 함)");
+    Serial.println("발사 시간 측정!");
   }
 
   // ========================센서 이상치 판단==========
@@ -545,23 +551,49 @@ void loop() {
     descent,
     jc);
 
-  //=====================10초 뒤 낙하산 강제 사출=================
+  /*===================== 낙하산 사출 함수=================
+      1. 발사 10초 뒤 낙하산 사출
+      2. 하강 20회 시 낙하산 사출
+      =================================================*/
 
   if (launchTimeStarted && !deployCtl.deployed) {
-
+    bool isCount = false;
     unsigned long flightTimeMs = millis() - launchTimeMs;
 
-    if (flightTimeMs >= 10000) {  // 1,000ms = 10초
-      //Serial.println("낙하산 사출! - 10초 조건");
+    if (flightTimeMs >= 10000 && !g_parachuteDeployed) {  // 1,000ms = 10초
+      Serial.println("낙하산 사출! - 10초 조건");
       deployCtl.state = DEPLOY_PUNCH;
       g_parachuteDeployed = true;
     }
+    if(prevClimbRate !=  flight.baro.climbRate) {
+    if(flight.baro.climbRate < 0) //하강 시 카운트 +1
+      jc.count++;
+    else{
+      if(jc.count > 0) //상승중이면 count가 0이상일 때만 count 1 감소
+      jc.count--;
+    }
+    prevClimbRate = flight.baro.climbRate;
+    }
+
+    if(jc.count > 20 && !g_parachuteDeployed ){ //낙하산 사출
+      deployCtl.state = DEPLOY_PUNCH;
+      g_parachuteDeployed = true;
+      Serial.println("낙하산 사출! - 고도 하강");
+      }
+      // Serial.print(flight.baro.altitude);
+      // Serial.print(",");
+      // Serial.println(flight.baro.climbRate);
+      //Serial.println(jc.count);
+      // if(!g_parachuteDeployed)
+      // Serial.println(jc.count);
   }
+
+
 
   // ========= 낙하산 서보 FSM 실행 ========================
 
   applyParachuteDeployState();
-  // 디버그(0.5초마다)
+
   static uint32_t lastPrint = 0;
   if (nowMs - lastPrint >= 200) {
     lastPrint = nowMs;
@@ -583,7 +615,7 @@ void loop() {
       sdLogFlush();
     }
 
-    // 디버그(0.5초마다)
+    
     static uint32_t lastPrint = 0;
     if (nowMs - lastPrint >= 500) {
       lastPrint = nowMs;
@@ -624,7 +656,7 @@ void loop() {
 
       Serial.print(" | Baro Alt=");
       Serial.print(flight.baro.altitude, 2);
-      Serial.print(" Vz=");
+      Serial.print(" climbRate =");
       Serial.print(flight.baro.climbRate, 2);
 
       Serial.print(" | GPS fix=");

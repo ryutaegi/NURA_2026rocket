@@ -52,6 +52,7 @@ uint8_t powered  = 0;
 uint8_t motorOver = 0;
 uint8_t apogee   = 0;
 uint8_t descent  = 0;
+uint8_t count = 0;
 };
 enum DeployState : uint8_t {  //서보모터 이넘
   DEPLOY_IDLE = 0,            // 사출 대기
