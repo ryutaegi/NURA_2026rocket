@@ -32,8 +32,6 @@ bool isAltitudeUp(const BaroData& baro);
 
 bool isAltitudeDown(const BaroData& baro);
 
-bool isStartFlight(bool pinDetached, bool accelOver);  //발사판단함수
-
 bool isPowered(bool accelOver, bool altitudeUp, JudgeCounters& jc);  //카운터 초기화 기능 추가
 
 bool isMotorOver(bool isPoweredNow, JudgeCounters& jc);  //카운터 초기화 추가

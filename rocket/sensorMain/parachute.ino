@@ -9,7 +9,7 @@ bool isOMGimu(const ImuData& imu){
 //Baro 고장 판단
 
 bool isOMGbaro(const BaroData& baro) {
-  return (baro.altitude == 100) || (baro.pressure == 100);
+  return (baro.pressure < 100 || baro.pressure > 1200);
 }
 
 void resetDecisionCounters(JudgeCounters& jc)  // 이상치 발견 시 상태 변경할 때 모든 누적값 초기화
