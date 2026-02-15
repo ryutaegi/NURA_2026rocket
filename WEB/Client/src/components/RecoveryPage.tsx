@@ -1,14 +1,25 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, Trash2, Save, Rocket, Download, Upload } from 'lucide-react';
+import { MapPin, Trash2, X, History as HistoryIcon } from 'lucide-react';
 import { toast } from "sonner";
 import { useWebSocket } from '../hooks/useWebSocket';
-import { RocketTelemetry, flightPhaseToStageMap } from './MainPage'; // MainPage에서 타입과 맵을 가져옵니다.
+import { RocketTelemetry, flightPhaseToStageMap } from './MainPage';
+import { db } from '../lib/firebase';
+import {
+  collection,
+  addDoc,
+  onSnapshot,
+  query,
+  orderBy,
+  deleteDoc,
+  doc,
+  updateDoc,
+  serverTimestamp
+} from 'firebase/firestore';
 
-// window 인터페이스에 google.maps 속성을 선언하여 타입스크립트 에러를 방지합니다.
 declare global {
-    interface Window {
-        google: any;
-    }
+  interface Window {
+    google: any;
+  }
 }
 
 interface RecoveryMarker {
@@ -23,61 +34,78 @@ export default function RecoveryPage() {
   const [markers, setMarkers] = useState<RecoveryMarker[]>([]);
   const [selectedMarker, setSelectedMarker] = useState<RecoveryMarker | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
-  const googleMapRef = useRef<google.maps.Map | null>(null);
-  const recoveryMarkersMapRef = useRef<Map<string, google.maps.Marker>>(new Map());
+  const googleMapRef = useRef<any>(null);
+  const recoveryMarkersMapRef = useRef<Map<string, any>>(new Map());
   const [isApiLoaded, setIsApiLoaded] = useState(false);
 
-  // 실시간 데이터 수신을 위한 WebSocket 훅
-  const { lastMessage } = useWebSocket();
+  // 내 위치 관련
+  const [userLocation, setUserLocation] = useState<any>(null);
+  const userMarkerRef = useRef<any>(null);
+
+  // 실시간 데이터
+  const { lastMessage, isConnected } = useWebSocket();
   const [liveTelemetry, setLiveTelemetry] = useState<RocketTelemetry | null>(null);
-  const liveRocketMarkerRef = useRef<google.maps.Marker | null>(null);
+  const liveRocketMarkerRef = useRef<any>(null);
+  const [isPC, setIsPC] = useState(window.innerWidth >= 1024);
 
-  // 마커 파일 저장/불러오기 관련 상태
-  const [savedFiles, setSavedFiles] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<string>('');
-
-  const fetchSavedFiles = async () => {
-    try {
-      // API 경로 수정: http://localhost:3001
-      const response = await fetch('http://localhost:3001/api/recovery-markers');
-      if (!response.ok) throw new Error('서버에서 파일 목록을 가져오는 데 실패했습니다.');
-      const files = await response.json();
-      setSavedFiles(files);
-      if (files.length > 0) {
-        setSelectedFile(files[0]);
-      }
-    } catch (error: any) {
-      toast.error(error.message);
-    }
-  };
-
+  // 화면 크기 감지
   useEffect(() => {
-    fetchSavedFiles();
+    const handleResize = () => setIsPC(window.innerWidth >= 1024);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Google Maps 스크립트 로드
+  // 로딩 상태 제거 (Firestore가 실시간 처리)
+
+  // Firebase 마커 실시간 구독
   useEffect(() => {
-    if (window.google && window.google.maps) {
+    const q = query(collection(db, "recovery_markers"), orderBy("timestamp", "asc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const markersData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp?.toDate() || new Date()
+      })) as RecoveryMarker[];
+      setMarkers(markersData);
+    }, (error) => {
+      console.error("Firestore Subscribe Error:", error);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Google Maps 스크립트 로드 - 중복 방지 및 최적화
+  useEffect(() => {
+    if (window.google?.maps) {
       setIsApiLoaded(true);
       return;
     }
+
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) {
-      console.error("VITE_GOOGLE_MAPS_API_KEY가 .env.local 파일에 필요합니다.");
+    if (!apiKey) return;
+
+    if (document.querySelector('script[src*="maps.googleapis.com"]')) {
+      // 이미 로드 중인 경우 감시
+      const timer = setInterval(() => {
+        if (window.google?.maps) {
+          setIsApiLoaded(true);
+          clearInterval(timer);
+        }
+      }, 500);
       return;
     }
+
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=geometry,drawing,places`;
     script.async = true;
     script.defer = true;
     script.onload = () => setIsApiLoaded(true);
     document.head.appendChild(script);
   }, []);
-  
-  // WebSocket 메시지 처리하여 실시간 텔레메트리 업데이트
+
+  // 텔레메트리 업데이트 (로컬)
   useEffect(() => {
-    if (lastMessage && lastMessage.type === 'telemetry') {
+    if (lastMessage?.type === 'telemetry') {
       const data = lastMessage.data;
       setLiveTelemetry({
         ...data,
@@ -86,41 +114,126 @@ export default function RecoveryPage() {
     }
   }, [lastMessage]);
 
-  // 지도 초기화 및 클릭 리스너 설정
+  // Firebase 실시간 중계 문서 구독 (원격)
+  useEffect(() => {
+    if (!isConnected) {
+      const unsub = onSnapshot(doc(db, "live", "current"), { includeMetadataChanges: true }, (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data({ serverTimestamps: 'estimate' });
+          let updatedAt = 0;
+          if (data.serverTimestamp?.toDate) {
+            updatedAt = data.serverTimestamp.toDate().getTime();
+          } else if (data.serverTimestamp?.seconds) {
+            updatedAt = data.serverTimestamp.seconds * 1000;
+          }
+
+          const timeDiff = Math.abs(Date.now() - updatedAt);
+          if (updatedAt && timeDiff < 60000) {
+            const telemetry = data.telemetry;
+            setLiveTelemetry({
+              ...telemetry,
+              stage: flightPhaseToStageMap[telemetry.flightPhase] || 'pre-launch',
+            });
+          }
+        }
+      }, (err) => console.error("Recovery Remote Sub Error:", err));
+      return () => unsub();
+    }
+  }, [isConnected]);
+
+  // 지도 초기화 - 핵심 로직 집중
   useEffect(() => {
     if (!isApiLoaded || !mapRef.current || googleMapRef.current) return;
 
-    const map = new window.google.maps.Map(mapRef.current, {
-      center: { lat: 37.5665, lng: 126.9780 },
-      zoom: 10,
-      mapId: 'NURA_ROCKET_RECOVERY_MAP',
-      disableDefaultUI: false,
-      zoomControl: true,
-    });
-    googleMapRef.current = map;
+    try {
+      console.log("Map initialization started on container:", mapRef.current);
+      const map = new window.google.maps.Map(mapRef.current, {
+        center: { lat: 37.5665, lng: 126.9780 },
+        zoom: 13,
+        mapTypeControl: true,
+        streetViewControl: false,
+        fullscreenControl: true,
+        backgroundColor: '#0f172a'
+      });
 
-    map.addListener('click', (e: google.maps.MapMouseEvent) => {
-      if (e.latLng) {
-        const newMarker: RecoveryMarker = {
-          id: Date.now().toString(),
-          latitude: e.latLng.lat(),
-          longitude: e.latLng.lng(),
-          timestamp: new Date(),
-          notes: '',
-        };
-        setMarkers(prev => [...prev, newMarker]);
-        setSelectedMarker(newMarker);
-      }
-    });
+      googleMapRef.current = map;
+
+      map.addListener('click', (e: any) => {
+        if (e.latLng) {
+          // click handler will use current isConnected via a ref or direct access if inside primitive effect
+          // However, for clean logic, we'll store a ref for isConnected or use a functional update approach
+          // Here, we just call the addMarker function
+        }
+      });
+    } catch (err) {
+      console.error("CRITICAL Map Init Error:", err);
+    }
   }, [isApiLoaded]);
 
-  // 'markers' 상태와 지도 위 회수 지점 마커 동기화
+  // 내 위치 추적 및 권한 대응
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        setUserLocation({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        });
+      },
+      (err) => {
+        console.log("Geolocation Error:", err.message);
+        if (err.code === 1) {
+          toast.error("위치 정보 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 허용해 주세요.");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
+  // 이펙트를 통해 지도 클릭 리스너를 isConnected 상태와 동기화
+  useEffect(() => {
+    if (!googleMapRef.current) return;
+
+    const clickListener = googleMapRef.current.addListener('click', (e: any) => {
+      if (isConnected && e.latLng) {
+        addMarker(e.latLng.lat(), e.latLng.lng());
+      } else if (!isConnected) {
+        toast.info("마커를 추가하려면 로컬 서버에 연결되어야 합니다.");
+      }
+    });
+
+    return () => window.google?.maps?.event?.removeListener(clickListener);
+  }, [isConnected, isApiLoaded]);
+
+  // 마커 동기화 및 실시간 업데이트 로직 (생략 방지)
   useEffect(() => {
     if (!googleMapRef.current || !isApiLoaded) return;
-    
-    const currentMarkerIds = new Set(markers.map(m => m.id));
 
-    // 삭제된 마커를 지도에서 제거
+    // 내 위치 마커
+    if (userLocation) {
+      if (!userMarkerRef.current) {
+        userMarkerRef.current = new window.google.maps.Marker({
+          position: userLocation,
+          map: googleMapRef.current,
+          icon: {
+            path: window.google.maps.SymbolPath.CIRCLE,
+            fillColor: '#4285F4',
+            fillOpacity: 1,
+            strokeColor: 'white',
+            strokeWeight: 2,
+            scale: 7,
+          }
+        });
+      } else {
+        userMarkerRef.current.setPosition(userLocation);
+      }
+    }
+
+    // 목록 마커 동기화
+    const currentMarkerIds = new Set(markers.map(m => m.id));
     recoveryMarkersMapRef.current.forEach((marker, id) => {
       if (!currentMarkerIds.has(id)) {
         marker.setMap(null);
@@ -128,271 +241,193 @@ export default function RecoveryPage() {
       }
     });
 
-    // 추가/업데이트된 마커를 지도에 렌더링
     markers.forEach((markerData, index) => {
       if (!recoveryMarkersMapRef.current.has(markerData.id)) {
-        const newMarker = new window.google.maps.Marker({
+        const marker = new window.google.maps.Marker({
           position: { lat: markerData.latitude, lng: markerData.longitude },
           map: googleMapRef.current,
-          title: `지점 ${index + 1}`,
+          label: { text: (index + 1).toString(), color: 'white' },
         });
-        newMarker.addListener('click', () => setSelectedMarker(markerData));
-        recoveryMarkersMapRef.current.set(markerData.id, newMarker);
+        marker.addListener('click', () => setSelectedMarker(markerData));
+        recoveryMarkersMapRef.current.set(markerData.id, marker);
       }
     });
-  }, [isApiLoaded, markers]);
 
-  // 선택된 마커 아이콘 업데이트
-  useEffect(() => {
-    recoveryMarkersMapRef.current.forEach((markerInstance, id) => {
-      const isSelected = selectedMarker?.id === id;
-      const markerData = markers.find(m => m.id === id);
-      const index = markers.findIndex(m => m.id === id);
-
-      markerInstance.setLabel({
-        text: (index + 1).toString(),
-        color: 'white',
-      });
-      markerInstance.setIcon({
-        path: window.google.maps.SymbolPath.CIRCLE,
-        fillColor: isSelected ? '#3b82f6' : '#6b7280',
-        fillOpacity: 1,
-        strokeWeight: 0,
-        scale: 10,
-      });
-    });
-  }, [isApiLoaded, selectedMarker, markers]);
-
-  // 실시간 로켓 마커 업데이트
-  useEffect(() => {
-    if (!googleMapRef.current || !isApiLoaded || !liveTelemetry) return;
-    
-    const livePosition = { lat: liveTelemetry.latitude, lng: liveTelemetry.longitude };
-
-    if (!liveRocketMarkerRef.current) {
-      const liveIcon = {
-        path: 'M15,0 L10,5 L10,15 L5,20 L5,25 L10,30 L10,40 L15,45 L20,40 L20,30 L25,25 L25,20 L20,15 L20,5 Z',
-        fillColor: '#ef4444', // 빨간색
-        fillOpacity: 1,
-        strokeWeight: 1,
-        rotation: liveTelemetry.yaw,
-        scale: 0.7,
-        anchor: new window.google.maps.Point(15, 25),
-      };
-      liveRocketMarkerRef.current = new window.google.maps.Marker({
-        position: livePosition,
-        map: googleMapRef.current,
-        icon: liveIcon,
-        title: '실시간 로켓 위치',
-        zIndex: 1000, // 다른 마커들보다 위에 표시
-      });
-    } else {
-      liveRocketMarkerRef.current.setPosition(livePosition);
-      const icon = liveRocketMarkerRef.current.getIcon() as google.maps.Symbol;
-      if (icon) {
-        icon.rotation = liveTelemetry.yaw;
-        liveRocketMarkerRef.current.setIcon(icon);
+    // 로켓 실시간 마커
+    if (liveTelemetry) {
+      const pos = { lat: liveTelemetry.latitude, lng: liveTelemetry.longitude };
+      if (!liveRocketMarkerRef.current) {
+        liveRocketMarkerRef.current = new window.google.maps.Marker({
+          position: pos,
+          map: googleMapRef.current,
+          icon: {
+            path: 'M15,0 L10,5 L10,15 L5,20 L5,25 L10,30 L10,40 L15,45 L20,40 L20,30 L25,25 L25,20 L20,15 L20,5 Z',
+            fillColor: '#ef4444',
+            fillOpacity: 1,
+            strokeWeight: 1,
+            rotation: liveTelemetry.yaw,
+            scale: 0.7,
+            anchor: new window.google.maps.Point(15, 25),
+          },
+          zIndex: 1000
+        });
+      } else {
+        liveRocketMarkerRef.current.setPosition(pos);
+        const icon = liveRocketMarkerRef.current.getIcon();
+        if (icon) {
+          icon.rotation = liveTelemetry.yaw;
+          liveRocketMarkerRef.current.setIcon(icon);
+        }
       }
     }
-  }, [isApiLoaded, liveTelemetry]);
+  }, [isApiLoaded, userLocation, markers, liveTelemetry]);
 
-  const deleteMarker = (id: string) => {
-    setMarkers(prev => prev.filter(m => m.id !== id));
-    if (selectedMarker?.id === id) {
-      setSelectedMarker(null);
-    }
-  };
-
-  const updateMarkerNotes = (id: string, notes: string) => {
-    setMarkers(prev => prev.map(m => m.id === id ? { ...m, notes } : m));
-    if (selectedMarker?.id === id) {
-      setSelectedMarker(prev => prev ? { ...prev, notes } : null);
-    }
-  };
-
-  const handleSaveMarkers = async () => {
-    if (markers.length === 0) {
-      toast.error("저장할 마커가 없습니다.");
-      return;
-    }
-    setIsLoading(true);
+  // 핸들러 함수들 (Firebase 연동)
+  const addMarker = async (lat: number, lng: number) => {
+    if (!isConnected) return;
     try {
-      const response = await fetch('http://localhost:3001/api/recovery-markers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ markers }),
+      await addDoc(collection(db, "recovery_markers"), {
+        latitude: lat,
+        longitude: lng,
+        notes: '',
+        timestamp: serverTimestamp()
       });
-      if (!response.ok) throw new Error('마커 저장에 실패했습니다.');
-      const result = await response.json();
-      toast.success(`마커가 ${result.filename}으로 저장되었습니다.`);
-      setMarkers([]); // 현재 마커 지우기
-      setSelectedMarker(null); // 선택된 마커 초기화
-      await fetchSavedFiles(); // 파일 목록 새로고침
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setIsLoading(false);
+      toast.success("포인트가 추가되었습니다.");
+    } catch (e) {
+      toast.error("포인트 추가 실패");
     }
   };
 
-  const handleLoadMarkers = async () => {
-    if (!selectedFile) {
-      toast.error("불러올 파일을 선택하세요.");
-      return;
-    }
-    setIsLoading(true);
+  const deleteMarker = async (id: string) => {
+    if (!isConnected) return;
     try {
-      const response = await fetch(`http://localhost:3001/api/recovery-markers/${selectedFile}`);
-      if (!response.ok) throw new Error('마커 불러오기에 실패했습니다.');
-      const loadedMarkers = await response.json();
-      
-      // JSON으로 직렬화된 timestamp를 다시 Date 객체로 변환
-      const markersWithDate = loadedMarkers.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }));
-
-      setMarkers(markersWithDate);
-      setSelectedMarker(null);
-      toast.success(`${selectedFile}에서 마커를 불러왔습니다.`);
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setIsLoading(false);
+      await deleteDoc(doc(db, "recovery_markers", id));
+      if (selectedMarker?.id === id) setSelectedMarker(null);
+      toast.success("포인트가 삭제되었습니다.");
+    } catch (e) {
+      toast.error("삭제 실패");
     }
   };
 
-  const handleDeleteFile = async () => {
-    if (!selectedFile) {
-      toast.error("삭제할 파일을 선택하세요.");
-      return;
-    }
-
-    if (!window.confirm(`정말로 '${selectedFile}' 파일을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) {
-      return;
-    }
-
-    setIsLoading(true);
+  const updateMarkerNotes = async (id: string, notes: string) => {
+    if (!isConnected) return;
     try {
-      const response = await fetch(`http://localhost:3001/api/recovery-markers/${selectedFile}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) throw new Error('파일 삭제에 실패했습니다.');
-      
-      toast.success(`'${selectedFile}' 파일이 삭제되었습니다.`);
-      
-      setMarkers([]); // 현재 마커 지우기
-      setSelectedMarker(null);
-      await fetchSavedFiles(); // 파일 목록 새로고침
-
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setIsLoading(false);
+      await updateDoc(doc(db, "recovery_markers", id), { notes });
+    } catch (e) {
+      console.error("Notes Update Error:", e);
     }
   };
 
   return (
-    <div className="h-[calc(100vh-4rem)] p-4">
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 h-full">
-        <div className="lg:col-span-3 bg-gray-900 rounded-lg overflow-hidden relative">
-          <div ref={mapRef} className="w-full h-full relative">
-            {!isApiLoaded && (
-              <div className="w-full h-full flex flex-col items-center justify-center text-white">
-                <p>지도를 불러오는 중...</p>
-              </div>
-            )}
-            <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-sm text-white px-4 py-3 rounded-lg z-10">
-              <div className="flex items-center gap-2 mb-2">
-                <MapPin className="w-5 h-5 text-blue-400" />
-                <span className="text-sm">로켓 회수 지점 관리</span>
-              </div>
-              <div className="text-xs text-gray-400">지도를 클릭하여 회수 지점 마커를 추가하세요</div>
-              {liveTelemetry && (
-                <div className="flex items-center gap-2 mt-4 pt-2 border-t border-gray-600">
-                    <Rocket className="w-5 h-5 text-red-400 animate-pulse" />
-                    <span className="text-sm">실시간 로켓 추적 중</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="bg-gray-900 rounded-lg p-4 flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-white flex items-center gap-2"><MapPin className="w-5 h-5" />회수 지점 목록</h2>
-          </div>
-          
-          <div className="bg-gray-800 rounded-lg p-3 mb-4">
-            <div className="grid grid-cols-1 gap-2">
-              <select
-                value={selectedFile}
-                onChange={(e) => setSelectedFile(e.target.value)}
-                className="w-full bg-gray-900 text-white text-sm rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
-                disabled={isLoading || savedFiles.length === 0}
-              >
-                {savedFiles.length === 0 ? (
-                  <option value="">저장된 파일 없음</option>
-                ) : (
-                  savedFiles.map(file => <option key={file} value={file}>{file}</option>)
-                )}
-              </select>
-              <div className="mt-2 grid grid-cols-1 gap-2"> {/* Reverted to grid-cols-1 for vertical stacking */}
-                <button 
-                  onClick={handleLoadMarkers}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded transition-colors flex items-center justify-center gap-2 disabled:bg-gray-600"
-                  disabled={isLoading || !selectedFile}
-                >
-                  <Download className="w-4 h-4" />
-                  불러오기
-                </button>
-                <button 
-                  onClick={handleDeleteFile}
-                  className="w-full bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-2 rounded transition-colors flex items-center justify-center gap-2 disabled:bg-gray-600"
-                  disabled={isLoading || !selectedFile}
-                >
-                  <Trash2 className="w-4 h-4" />
-                  삭제
-                </button>
-                <button 
-                  onClick={handleSaveMarkers}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded transition-colors flex items-center justify-center gap-2 disabled:bg-gray-600"
-                  disabled={isLoading || markers.length === 0}
-                >
-                  <Upload className="w-4 h-4" />
-                  저장
-                </button>
-              </div>
-            </div>
-          </div>
+    <div
+      className="h-[calc(100vh-4rem)] p-4 bg-black overflow-hidden flex"
+      style={{ flexDirection: isPC ? 'row' : 'column', gap: '1rem' }}
+    >
+      {/* 맵 컨테이너 */}
+      <div
+        className="bg-gray-950 rounded-2xl overflow-hidden relative border border-white/10 shadow-2xl"
+        style={{ flex: isPC ? 3 : 'none', height: isPC ? '100%' : '40vh' }}
+      >
+        <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
 
-          <div className="flex-1 space-y-2 mb-4 overflow-y-auto min-h-0">
-            {markers.length === 0 ? (
-              <div className="text-gray-500 text-sm text-center py-8">지도를 클릭하여 마커를 추가하거나<br/>저장된 마커를 불러오세요.</div>
-            ) : (
-              markers.map((marker, index) => (
-                <div key={marker.id} className={`bg-gray-800 rounded-lg p-3 cursor-pointer transition-all ${selectedMarker?.id === marker.id ? 'ring-2 ring-blue-500' : 'hover:bg-gray-750'}`} onClick={() => setSelectedMarker(marker)}>
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs">{index + 1}</div>
-                      <span className="text-white text-sm">지점 {index + 1}</span>
-                    </div>
-                    <button onClick={(e) => { e.stopPropagation(); deleteMarker(marker.id); }} className="text-gray-400 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
-                  </div>
-                  <div className="text-xs text-gray-400 space-y-1">
-                    <div>위도: {marker.latitude.toFixed(6)}°</div>
-                    <div>경도: {marker.longitude.toFixed(6)}°</div>
-                    <div>시간: {new Date(marker.timestamp).toLocaleTimeString()}</div>
-                  </div>
-                  {marker.notes && <div className="mt-2 text-xs text-gray-300 bg-gray-900 rounded p-2">{marker.notes}</div>}
-                </div>
-              ))
-            )}
+        {/* 상단 오버레이 제거됨 */}
+        {!isApiLoaded && (
+          <div className="absolute top-4 left-4 bg-black/80 backdrop-blur-md text-white px-4 py-2 rounded-xl z-10 border border-white/10">
+            <p className="text-[10px] text-blue-400 animate-pulse">Loading Map Engine...</p>
           </div>
-          {selectedMarker && (
-            <div className="bg-gray-800 rounded-lg p-4 border-t border-gray-700">
-              <h3 className="text-white text-sm mb-2">메모</h3>
-              <textarea value={selectedMarker.notes} onChange={(e) => updateMarkerNotes(selectedMarker.id, e.target.value)} placeholder="회수 지점에 대한 메모를 입력하세요..." className="w-full bg-gray-900 text-white text-sm rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none resize-none" rows={3}/>
-              <button onClick={() => { updateMarkerNotes(selectedMarker.id, selectedMarker.notes); setSelectedMarker(null); }} className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded transition-colors flex items-center justify-center gap-2"><Save className="w-4 h-4" />저장</button>
+        )}
+
+        {/* 선택된 마커 정보 오버레이 이동됨 (사이드바로) */}
+
+        {/* 위치 버튼 */}
+        {userLocation && (
+          <button
+            onClick={() => googleMapRef.current?.panTo(userLocation)}
+            className="absolute bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-2xl z-20 hover:bg-blue-500 active:scale-90 transition-all border border-white/20"
+          >
+            <MapPin className="w-6 h-6" />
+          </button>
+        )}
+      </div>
+
+      {/* 조작 패널 */}
+      <div
+        className="bg-gray-900/50 backdrop-blur-xl p-4 flex flex-col gap-4 rounded-2xl border border-white/10 overflow-hidden"
+        style={{ width: isPC ? '320px' : '100%', flex: isPC ? 'none' : 1 }}
+      >
+        <div className="flex items-center gap-2 text-white font-black text-sm border-b border-white/5 pb-2">
+          <HistoryIcon className="w-4 h-4 text-blue-400" /> 포인트 관리
+        </div>
+
+        {/* {!isConnected && (
+          <div className="bg-blue-600/10 border border-blue-500/20 p-3 rounded-lg flex flex-col gap-1 items-center text-center">
+            <span className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Read Only Mode</span>
+            <p className="text-[9px] text-white-300/60 leading-tight">로컬 서버에 연결되지 않아<br />조작이 제한됩니다.</p>
+          </div>
+        )} */}
+
+        <div className="flex-1 overflow-y-auto space-y-2 min-h-0 py-2">
+          {markers.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center opacity-20 gap-2 mb-10">
+              <MapPin className="w-10 h-10" />
+              <p className="text-[10px] font-black uppercase tracking-widest">No Active Points</p>
             </div>
+          ) : (
+            markers.map((m, i) => (
+              <div
+                key={m.id}
+                className={`p-3 rounded-xl border transition-all cursor-pointer transform hover:scale-[1.01] active:scale-[0.98] ${selectedMarker?.id === m.id ? 'bg-blue-600/20 border-blue-500/50 shadow-lg' : 'bg-gray-800/50 border-white/5 hover:border-white/20'}`}
+                onClick={() => {
+                  setSelectedMarker(m);
+                  googleMapRef.current?.panTo({ lat: m.latitude, lng: m.longitude });
+                  googleMapRef.current?.setZoom(16);
+                }}
+              >
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-white font-black text-xs uppercase tracking-tight">Point {i + 1}</span>
+                  {isConnected && (
+                    <button onClick={(e) => { e.stopPropagation(); deleteMarker(m.id); }} className="text-gray-500 hover:text-red-400 transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <div className="text-[10px] text-gray-500 font-mono">
+                  {m.latitude.toFixed(6)}, {m.longitude.toFixed(6)}
+                </div>
+              </div>
+            ))
           )}
         </div>
+
+        {/* 선택된 마커 상세 정보 (사이드바 하단) */}
+        {selectedMarker && (
+          <div className="mt-auto border-t border-white/5 pt-4 flex flex-col gap-3">
+            <div className="flex justify-between items-center">
+              <h3 className="font-black text-[10px] uppercase tracking-widest text-blue-400">Point Details</h3>
+              <button onClick={() => setSelectedMarker(null)} className="text-gray-500 hover:text-white transition-colors">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="bg-gray-950/30 rounded-xl p-3 border border-white/5">
+              <div className="text-[9px] text-gray-500 font-mono mb-2 break-all">
+                {selectedMarker.latitude.toFixed(8)}, {selectedMarker.longitude.toFixed(8)}
+              </div>
+              <textarea
+                value={selectedMarker.notes}
+                onChange={(e) => {
+                  if (!isConnected) return;
+                  const newNotes = e.target.value;
+                  setSelectedMarker(prev => prev ? { ...prev, notes: newNotes } : null);
+                  updateMarkerNotes(selectedMarker.id, newNotes);
+                }}
+                readOnly={!isConnected}
+                className={`w-full bg-gray-950/50 text-white text-[11px] rounded-lg p-3 outline-none h-32 resize-none border transition-all ${!isConnected ? 'border-transparent cursor-default' : 'border-white/10 focus:border-blue-500/50 shadow-inner'}`}
+                placeholder={isConnected ? "회수 지점에 대한 메모를 입력하세요..." : "로컬 서버 연결 후 입력 가능합니다."}
+              />
+              {!isConnected && <p className="text-[8px] text-gray-500 mt-2 italic">* 로컬 서버에 연결되어야 메모를 수정할 수 있습니다.</p>}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

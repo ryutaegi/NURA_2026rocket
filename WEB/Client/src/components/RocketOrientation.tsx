@@ -24,35 +24,41 @@ export default function RocketOrientation({ telemetry }: RocketOrientationProps)
     scene.background = new THREE.Color(0x0a0a0a);
     sceneRef.current = scene;
 
-    // Camera 설정
-    const camera = new THREE.PerspectiveCamera(
-      75,
-      containerRef.current.clientWidth / containerRef.current.clientHeight,
-      0.1,
-      1000
-    );
-    camera.position.z = 5;
-    camera.position.y = 2;
-    camera.lookAt(0, 0, 0);
-    cameraRef.current = camera;
-
     // Renderer 설정
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
-    containerRef.current.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 
-    // OrbitControls 설정
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.enableZoom = true;
+    const initRenderer = () => {
+      if (!containerRef.current) return;
+      const width = containerRef.current.clientWidth || 300;
+      const height = containerRef.current.clientHeight || 200;
+
+      // Camera 설정
+      const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+      camera.position.set(0, 2, 5);
+      camera.lookAt(0, 0, 0);
+      cameraRef.current = camera;
+
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      containerRef.current.appendChild(renderer.domElement);
+      rendererRef.current = renderer;
+
+      // OrbitControls 설정
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+
+      return { camera, controls };
+    };
+
+    const { camera, controls } = initRenderer() || {};
+    if (!camera || !controls || !renderer) return;
 
     // 로켓 그룹 생성
     const rocket = new THREE.Group();
     rocket.position.y = 0; // 그리드 높이에 맞춤
     scene.add(rocket);
     rocketRef.current = rocket;
-    
+
     // GLTF 모델 로더
     const loader = new GLTFLoader();
     loader.load(
@@ -147,12 +153,12 @@ export default function RocketOrientation({ telemetry }: RocketOrientationProps)
   return (
     <div className="relative w-full h-full">
       <div ref={containerRef} className="w-full h-full" />
-      
+
       {/* 정보 오버레이 */}
       <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-sm text-white px-4 py-3 rounded-lg space-y-1">
         <div className="text-xs text-gray-400 mb-2">로켓 자세 (Three.js)</div>
         <div className="grid grid-cols-3 gap-4 text-sm">
-        <div>
+          <div>
             <div className="text-xs text-gray-400">Roll</div>
             <div className="text-blue-400">{telemetry.roll.toFixed(1)}°</div>
           </div>
@@ -169,7 +175,7 @@ export default function RocketOrientation({ telemetry }: RocketOrientationProps)
 
       {/* 좌표축 라벨 */}
       <div className="absolute bottom-4 right-4 bg-black/70 backdrop-blur-sm text-white px-4 py-3 rounded-lg text-xs">
-      <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1">
           <div className="w-4 h-0.5 bg-blue-500" />
           <span>X (roll)</span>
         </div>
@@ -182,7 +188,7 @@ export default function RocketOrientation({ telemetry }: RocketOrientationProps)
           <div className="w-4 h-0.5 bg-green-500" />
           <span>Z (Yaw)</span>
         </div>
-        
+
       </div>
     </div>
   );

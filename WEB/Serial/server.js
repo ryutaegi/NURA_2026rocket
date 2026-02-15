@@ -51,7 +51,7 @@ app.post('/api/recovery-markers', (req, res) => {
   if (!markers || !Array.isArray(markers)) {
     return res.status(400).json({ message: "잘못된 마커 데이터 형식입니다." });
   }
-  
+
   const dataDir = path.join(__dirname, 'recovery_data');
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir);
@@ -101,7 +101,7 @@ app.delete('/api/recovery-markers/:filename', (req, res) => {
   const dataDir = path.join(__dirname, 'recovery_data');
   const filePath = path.join(dataDir, filename);
   console.log(`[DELETE] 확인 경로: ${filePath}`);
-  
+
   // 경로 조작 공격 방지
   if (path.dirname(filePath) !== dataDir) {
     console.error(`[DELETE] 경로 조작 시도 감지됨: ${filename}`);
@@ -246,36 +246,36 @@ try {
         rxBuffer = Buffer.alloc(0);
         return;
       }
-  
+
       // sync 앞의 쓰레기 데이터 제거
       if (syncIndex > 0) {
         rxBuffer = rxBuffer.slice(syncIndex);
       }
-  
+
       // 아직 패킷 하나 분량 안 되면 대기
       if (rxBuffer.length < EXPECTED_PACKET_LEN) {
         return;
       }
-  
+
       // 패킷 하나 추출
       const packet = rxBuffer.slice(0, EXPECTED_PACKET_LEN);
       rxBuffer = rxBuffer.slice(EXPECTED_PACKET_LEN);
-  
+
       // 체크섬 검증
       let checksum = 0;
       for (let i = 1; i < EXPECTED_PACKET_LEN - 1; i++) {
         checksum = (checksum + packet[i]) & 0xFF;
       }
-  
+
       if (checksum !== packet[EXPECTED_PACKET_LEN - 1]) {
         console.error("체크섬 오류, 패킷 버림");
         continue; // 다음 패킷 탐색
       }
-  
+
       try {
         const telemetryData = {
           timestamp: Date.now(),
-  
+
           roll: packet.readFloatLE(1),
           pitch: packet.readFloatLE(5),
           yaw: packet.readFloatLE(9),
@@ -290,20 +290,20 @@ try {
           flightPhase: packet.readUInt8(42),
           battery: 100, // 임시
         };
-  
+
         broadcastData(telemetryData);
-  
+
       } catch (e) {
         console.error("패킷 파싱 에러:", e.message);
       }
     }
   });
-  
+
 
 } catch (error) {
   console.error('시리얼 포트 초기화 실패:', error.message);
   console.log('테스트 모드로 실행 중 (시뮬레이션 데이터 사용)');
-  
+
   // 시리얼 포트가 없을 때 시뮬레이션 데이터 생성
   setInterval(() => broadcastData(createTestData()), 100);
 }
@@ -315,6 +315,37 @@ wss.on('connection', (ws) => {
   ws.on('message', async (message) => { // 메시지 핸들러를 async로 변경
     try {
       const msg = JSON.parse(message);
+
+      // --- 웹소켓 제어 명령 처리 추가 ---
+      if (msg.type === 'emergency_eject') {
+        if (serialPort && serialPort.isOpen) {
+          serialPort.write('EJECT\n', (err) => {
+            if (err) {
+              console.error('시리얼 쓰기 에러 (EJECT):', err.message);
+              return ws.send(JSON.stringify({ type: 'error', message: '명령 전송에 실패했습니다.' }));
+            }
+            console.log('[WS] 비상 사출 명령 전송됨');
+            ws.send(JSON.stringify({ type: 'command_success', message: '비상 사출 명령이 전송되었습니다.' }));
+          });
+        } else {
+          ws.send(JSON.stringify({ type: 'error', message: '지상국 수신기가 연결되지 않았습니다.' }));
+        }
+      }
+
+      if (msg.type === 'center_align') {
+        if (serialPort && serialPort.isOpen) {
+          serialPort.write('CENTER\n', (err) => {
+            if (err) {
+              console.error('시리얼 쓰기 에러 (CENTER):', err.message);
+              return ws.send(JSON.stringify({ type: 'error', message: '명령 전송에 실패했습니다.' }));
+            }
+            console.log('[WS] 중앙 정렬 명령 전송됨');
+            ws.send(JSON.stringify({ type: 'command_success', message: '카운트다운이 시작되었습니다.' }));
+          });
+        } else {
+          ws.send(JSON.stringify({ type: 'error', message: '지상국 수신기가 연결되지 않았습니다.' }));
+        }
+      }
 
       // 기록 시작
       if (msg.type === 'start_recording') {
@@ -332,7 +363,7 @@ wss.on('connection', (ws) => {
               }
             });
             console.log('Google Geocoding API 응답:', JSON.stringify(response.data, null, 2)); // API 응답 전체 로깅
-            
+
             if (response.data.results && response.data.results.length > 0) {
               humanReadableAddress = response.data.results[0].formatted_address;
             } else {
@@ -344,7 +375,7 @@ wss.on('connection', (ws) => {
             humanReadableAddress = latLngString; // 에러 발생 시 좌표로 대체
           }
         } else {
-            humanReadableAddress = latLngString || '알 수 없음'; // API 키 없거나 좌표 없으면 기본값
+          humanReadableAddress = latLngString || '알 수 없음'; // API 키 없거나 좌표 없으면 기본값
         }
 
         isRecording = true;
@@ -354,12 +385,12 @@ wss.on('connection', (ws) => {
           startTime: Date.now(),
           launchSite: humanReadableAddress, // 리버스 지오코딩된 주소 저장
         };
-        
+
         ws.send(JSON.stringify({
           type: 'recording_started',
           recordingId: currentRecording.id,
         }));
-        
+
         console.log('기록 시작:', currentRecording.id, '장소:', humanReadableAddress);
       }
 
@@ -439,7 +470,7 @@ wss.on('connection', (ws) => {
       if (msg.type === 'get_recording_data') {
         const dataDir = path.join(__dirname, 'launch_data');
         const filePath = path.join(dataDir, `launch_${msg.recordingId}.json`);
-        
+
         if (fs.existsSync(filePath)) {
           const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
           ws.send(JSON.stringify({

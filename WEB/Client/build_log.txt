@@ -1,0 +1,49 @@
+
+> Rocket Tracking Web Design@0.1.0 build
+> vite build
+
+vite v6.3.5 building for production...
+transforming...
+✓ 4 modules transformed.
+✗ Build failed in 23ms
+error during build:
+[vite:esbuild] Transform failed with 3 errors:
+/Users/taegi/Documents/NURA_2026rocket/WEB/Client/src/App.tsx:75:54: ERROR: Unexpected closing "NavLink" tag does not match opening "MobileNavLink" tag
+/Users/taegi/Documents/NURA_2026rocket/WEB/Client/src/App.tsx:76:69: ERROR: Unexpected closing "NavLink" tag does not match opening "MobileNavLink" tag
+/Users/taegi/Documents/NURA_2026rocket/WEB/Client/src/App.tsx:77:69: ERROR: Unexpected closing "NavLink" tag does not match opening "MobileNavLink" tag
+file: /Users/taegi/Documents/NURA_2026rocket/WEB/Client/src/App.tsx:75:54
+
+Unexpected closing "NavLink" tag does not match opening "MobileNavLink" tag
+73 |        {isMenuOpen && (
+74 |          <div className="md:hidden bg-gray-900 border-b border-gray-800 px-2 pt-2 pb-3 space-y-1 shadow-2xl animate-in slide-in-from-top duration-200">
+75 |            <MobileNavLink to="/" icon={Rocket}>메인</NavLink>
+   |                                                        ^
+76 |            <MobileNavLink to="/recovery" icon={MapPin}>로켓 회수</NavLink>
+77 |            <MobileNavLink to="/history" icon={History}>발사 기록</NavLink>
+
+Unexpected closing "NavLink" tag does not match opening "MobileNavLink" tag
+74 |          <div className="md:hidden bg-gray-900 border-b border-gray-800 px-2 pt-2 pb-3 space-y-1 shadow-2xl animate-in slide-in-from-top duration-200">
+75 |            <MobileNavLink to="/" icon={Rocket}>메인</NavLink>
+76 |            <MobileNavLink to="/recovery" icon={MapPin}>로켓 회수</NavLink>
+   |                                                                       ^
+77 |            <MobileNavLink to="/history" icon={History}>발사 기록</NavLink>
+78 |          </div>
+
+Unexpected closing "NavLink" tag does not match opening "MobileNavLink" tag
+75 |            <MobileNavLink to="/" icon={Rocket}>메인</NavLink>
+76 |            <MobileNavLink to="/recovery" icon={MapPin}>로켓 회수</NavLink>
+77 |            <MobileNavLink to="/history" icon={History}>발사 기록</NavLink>
+   |                                                                       ^
+78 |          </div>
+79 |        )}
+
+    at failureErrorWithLog (/Users/taegi/Documents/NURA_2026rocket/WEB/Client/node_modules/esbuild/lib/main.js:1467:15)
+    at /Users/taegi/Documents/NURA_2026rocket/WEB/Client/node_modules/esbuild/lib/main.js:736:50
+    at responseCallbacks.<computed> (/Users/taegi/Documents/NURA_2026rocket/WEB/Client/node_modules/esbuild/lib/main.js:603:9)
+    at handleIncomingPacket (/Users/taegi/Documents/NURA_2026rocket/WEB/Client/node_modules/esbuild/lib/main.js:658:12)
+    at Socket.readFromStdout (/Users/taegi/Documents/NURA_2026rocket/WEB/Client/node_modules/esbuild/lib/main.js:581:7)
+    at Socket.emit (node:events:507:28)
+    at addChunk (node:internal/streams/readable:559:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:510:3)
+    at Readable.push (node:internal/streams/readable:390:5)
+    at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
