@@ -30,6 +30,13 @@ DeployController deployCtl;
 bool pinDetached = false;
 bool g_parachuteDeployed = false;  //낙하산 사출 여부
 
+// 낙하산 사출 여부 핀 보드로의 송신을 위한 변수 선언
+static bool lastParachute = false; 
+
+static bool b2aBurst = false;
+static uint32_t b2aBurstStartMs = 0;
+static uint32_t b2aLastSendMs = 0;
+
 FlightData flight;
 // 1) BMP280
 // ============================================================================
@@ -319,8 +326,61 @@ void parseAtoB(Stream& link, FlightData& f, uint32_t nowB_ms) {
   }
 }
 
+// ============================================================================
+// 4) B2A UART 패킷 송신 (g_parachuteDeployed 전송)
+//    - Serial3로 핀보드(A보드)에 상태 전달
+//    - 프레임 + CRC16 CCITT-FALSE 사용(기존 crc16_ccitt 재사용)
+// ============================================================================
 
+static const uint8_t B2A_SYNC1 = 0xB5;
+static const uint8_t B2A_SYNC2 = 0x5B;
+static const uint8_t B2A_VER   = 1;
+static const uint8_t B2A_MSG   = 0x31;   // parachute status message
+static const uint8_t B2A_LEN   = 6;      // payload length
 
+static inline void wr_u16_le(uint8_t* p, uint16_t v) {
+  p[0] = (uint8_t)(v & 0xFF);
+  p[1] = (uint8_t)((v >> 8) & 0xFF);
+}
+static inline void wr_u32_le(uint8_t* p, uint32_t v) {
+  p[0] = (uint8_t)(v & 0xFF);
+  p[1] = (uint8_t)((v >> 8) & 0xFF);
+  p[2] = (uint8_t)((v >> 16) & 0xFF);
+  p[3] = (uint8_t)((v >> 24) & 0xFF);
+}
+
+// payload (6B):
+//  [0] deployed(1: true / 0: false)
+//  [1] reserved
+//  [2..5] timeMs (uint32_t)  // B보드 기준 타임스탬프
+void sendBtoA_ParachuteStatus(Stream& link, bool deployed, uint32_t nowMs) {
+  uint8_t hdr[5];                 // VER(1) MSG(1) LEN(1) reserved(2) = 5
+  uint8_t payload[B2A_LEN];
+  uint8_t crcBuf[5 + B2A_LEN];
+
+  hdr[0] = B2A_VER;
+  hdr[1] = B2A_MSG;
+  hdr[2] = B2A_LEN;
+  hdr[3] = 0;
+  hdr[4] = 0;
+
+  payload[0] = deployed ? 1 : 0;
+  payload[1] = 0;
+  wr_u32_le(&payload[2], nowMs);
+
+  memcpy(crcBuf, hdr, sizeof(hdr));
+  memcpy(crcBuf + sizeof(hdr), payload, sizeof(payload));
+
+  uint16_t crc = crc16_ccitt(crcBuf, sizeof(crcBuf));
+  uint8_t crcLe[2];
+  wr_u16_le(crcLe, crc);
+
+  link.write(B2A_SYNC1);
+  link.write(B2A_SYNC2);
+  link.write(hdr, sizeof(hdr));
+  link.write(payload, sizeof(payload));
+  link.write(crcLe, 2);
+}
 
 
 // sd
@@ -430,8 +490,6 @@ void setup() {
   // GPS
   initGps();
 
-
-
   // Baro
   if (!initBaro()) {
     Serial.println("BMP280 init FAIL");
@@ -442,7 +500,7 @@ void setup() {
     Serial.println(g_p0_hPa, 2);
   }
 
-  //낙하산
+  //낙하산  
 
   pinMode(PIN_CONNECT_DETECT, INPUT_PULLUP);  //낙하산 커넥트핀 상태 설정
 
@@ -491,7 +549,6 @@ void loop() {
   // Serial2.write(Serial.read());
 
   sendLoraFromFlight(flight, g_parachuteDeployed, pinDetached);
-
 
   if (!pinDetached) {
     pinDetached = isConnectOrDeteached(PIN_CONNECT_DETECT);
@@ -587,7 +644,28 @@ void loop() {
 
   }
 
+  // ========================
+  // B -> A : parachute 상태 전송 (변화 시 버스트)
+  // ========================
+  if (!lastParachute && g_parachuteDeployed) {
+    // false -> true 변화를 감지
+    b2aBurst = true;
+    b2aBurstStartMs = nowMs;
+    b2aLastSendMs = 0; // 즉시 한 번 보내기 위해 리셋
+  }
 
+  lastParachute = g_parachuteDeployed;
+
+  // 버스트 재전송: 0.5초 동안 10Hz로만
+  if (b2aBurst) {
+    if (b2aLastSendMs == 0 || (nowMs - b2aLastSendMs) >= 100) { // 100ms = 10Hz
+      b2aLastSendMs = nowMs;
+      sendBtoA_ParachuteStatus(Serial3, true, millis());
+    }
+    if (nowMs - b2aBurstStartMs >= 500) { // 0.5초 후 종료 (대략 5회)
+      b2aBurst = false;
+    }
+  }
 
   // ========= 낙하산 서보 FSM 실행 ========================
 
@@ -614,7 +692,6 @@ void loop() {
       sdLogFlush();
     }
 
-    
     static uint32_t lastPrint = 0;
     if (nowMs - lastPrint >= 500) {
       lastPrint = nowMs;
@@ -670,3 +747,4 @@ void loop() {
     }
   }
 }
+

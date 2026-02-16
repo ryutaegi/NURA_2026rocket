@@ -203,6 +203,12 @@ void updateFlightState(FlightData& flight, bool startFlight, bool powered, bool 
         // 🔴 낙하산 사출 트리거 (DESCENT 진입 시 단 1회)
         if (!deployCtl.deployed) {
           deployCtl.state = DEPLOY_PUNCH;
+          g_parachuteDeployed = true;
+
+          Serial.print("B->A sent parachute=");
+          Serial.print(g_parachuteDeployed);
+          Serial.print(" t=");
+          Serial.println(millis());
         }
       }
       break;
