@@ -107,10 +107,22 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
   };
 
 
-  const playLater = () => {
-    if (audioRef.current) {
-      audioRef.current.play(); // 이제는 언제든지 재생 가능
+  // const playLater = () => {
+  //   if (audioRef.current) {
+  //     audioRef.current.play(); // 이제는 언제든지 재생 가능
+  //   }
+  // };
+
+  const playSound = (src: string) => {
+    if (!unlocked) {
+      console.warn("오디오가 아직 언락되지 않았습니다.");
+      return;
     }
+  
+    const audio = new Audio(src);
+    audio.play().catch((e) => {
+      console.error("사운드 재생 실패:", e);
+    });
   };
 
   // 연결 상태 토스트 알림 (상태 변화 시 1회만)
@@ -214,13 +226,13 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
 
       if (data.connect == 3) { //커넥트핀 해제
         toast.success(data.message || "카운트다운이 시작되었습니다.");
-        playLater();
+        playSound("/sounds/count.mp3");
         data.connect = 1;
       }
 
       if (data.connect == 2) { //커넥트핀 연결
         toast.success(data.message || "카운트다운이 시작되었습니다.");
-        playLater();
+        playSound("/sounds/count.mp3");
         data.connect = 0;
       }
 
@@ -403,7 +415,7 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
     disconnected: { text: "연결 안됨", color: "text-gray-500", icon: <Signal className="w-4 h-4 opacity-50" /> }
   }[currentStatus];
 
-  const handleEmergencyEject = () => sendMessage({ type: 'emergency_eject' });
+  const handleEmergencyEject = () => {sendMessage({ type: 'emergency_eject' }); playSound("/sounds/ssagal.mp3");}
   const handleCenterAlign = () => sendMessage({ type: 'center_align' });
 
   useEffect(() => {
@@ -528,15 +540,20 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
               {/* 사운드 및 비상 사출 */}
               <div className="bg-gray-900/50 backdrop-blur-sm rounded-xl p-4 border border-white/5">
                 <div className="flex gap-3">
-                  <audio ref={audioRef} src="/sounds/count.mp3" />
+                  <audio ref={audioRef} src="/sounds/silent.wav" />
                   <button
-                    onClick={unlocked ? playLater : unlockAudio}
+                    onClick={() => {
+                      if (unlocked) {
+                        playSound("/sounds/count.mp3");
+                      } else {
+                        unlockAudio();
+                      }
+                    }}
                     className={`flex-1 ${unlocked ? 'bg-blue-600 hover:bg-blue-500' : 'bg-yellow-600 hover:bg-yellow-500'} text-white px-4 py-3 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 font-black text-sm shadow-lg`}
                   >
                     <Radio className="h-4 w-4" />
                     {unlocked ? "카운트다운" : "사운드 허용"}
                   </button>
-
                   <button
                     onClick={handleEmergencyEject}
                     className="flex-1 bg-red-600 hover:bg-red-500 text-white px-4 py-3 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 font-black text-sm shadow-lg shadow-red-900/40"
