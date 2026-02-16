@@ -238,7 +238,7 @@ void processIMU()
 
         Serial.print(flightData.roll, 2); Serial.print(F("//"));
         Serial.print(flightData.pitch, 2);  Serial.print(F("//"));
-        Serial.print(flightData.yaw, 2); Serial.print(F("//"));
+        Serial.print(flightData.yaw, 2); Serial.print(F("//"));-
         Serial.println(flightData.filterRoll,2); 
         //Serial.println(wGyro);
     }

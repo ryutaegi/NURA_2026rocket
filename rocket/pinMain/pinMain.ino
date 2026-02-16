@@ -7,6 +7,106 @@
 
 #define PIN_CONNECT_DETECT 2
 
+// ===== B -> A parachute status receiver =====     10번에서 74번 줄까지 낙하산 사출 여부
+static const uint8_t B2A_SYNC1 = 0xB5;
+static const uint8_t B2A_SYNC2 = 0x5B;
+static const uint8_t B2A_VER   = 1;
+static const uint8_t B2A_MSG   = 0x31;
+static const uint8_t B2A_LEN   = 6;
+
+static bool g_servoReleased = false; //서보 상태 변경 정의
+
+bool g_parachuteFromB = false;
+
+void pollB2A(Stream& link) {
+  enum { WAIT_S1, WAIT_S2, READ_HDR, READ_PAYLOAD } static st = WAIT_S1;
+
+  static uint8_t hdr[5];
+  static uint8_t payload[B2A_LEN];
+  static uint8_t crcBytes[2];
+  static uint8_t idx = 0;
+
+  while (link.available()) {
+    uint8_t b = link.read();
+
+    switch (st) {
+      case WAIT_S1:
+        if (b == B2A_SYNC1) st = WAIT_S2;
+        break;
+
+      case WAIT_S2:
+        if (b == B2A_SYNC2) {
+          st = READ_HDR;
+          idx = 0;
+        } else st = WAIT_S1;
+        break;
+
+      case READ_HDR:
+        hdr[idx++] = b;
+        if (idx >= 5) {
+          if (hdr[0] != B2A_VER || hdr[1] != B2A_MSG || hdr[2] != B2A_LEN) {
+            st = WAIT_S1;
+            break;
+          }
+          idx = 0;
+          st = READ_PAYLOAD;
+        }
+        break;
+
+      case READ_PAYLOAD:
+        if (idx < B2A_LEN) {
+          payload[idx++] = b;
+        } else if (idx < B2A_LEN + 2) {
+          crcBytes[idx - B2A_LEN] = b;
+          idx++;
+        }
+
+        if (idx >= B2A_LEN + 2) {
+          // ⚠ CRC 생략 버전 (디버깅용)
+          g_parachuteFromB = (payload[0] == 1);
+
+          Serial.print("RECV B->A parachute=");
+          Serial.println(g_parachuteFromB);
+
+          st = WAIT_S1;
+        }
+        break;
+    }
+  }
+}
+
+//서보 모터 제어 해제
+static void pcaWrite8(uint8_t i2cAddr, uint8_t reg, uint8_t data) {
+  WIRE_PORT.beginTransmission(i2cAddr);
+  WIRE_PORT.write(reg);
+  WIRE_PORT.write(data);
+  WIRE_PORT.endTransmission();
+}
+
+void servoDetachPCA(uint8_t ch) {
+  const uint8_t PCA_ADDR = 0x40;
+  uint8_t reg = 0x06 + 4 * ch;     // LEDn_ON_L base
+  pcaWrite8(PCA_ADDR, reg + 3, 0x10); // LEDn_OFF_H: FULL_OFF bit(4)=1
+}
+// 채널 출력 완전 OFF (FULL_OFF bit)
+static void releaseServosOnce() {
+  if (g_servoReleased) return;
+
+  // 먼저 중립 한 번 보내고(선택), 잠깐 기다린 뒤 OFF
+  writeServoDeg(MOTOR_CH1, SERVO_NEUTRAL_DEG1);
+  writeServoDeg(MOTOR_CH2, SERVO_NEUTRAL_DEG2);
+  delay(50);
+
+  servoDetachPCA(MOTOR_CH1);
+  servoDetachPCA(MOTOR_CH2);
+
+  g_servoReleased = true;
+  Serial.println("Servo released (FULL_OFF)");
+}
+
+
+
+
 // [Spike Filter 변수]
 static int      spikeCounter = 0;
 static const int MAX_SPIKE_COUNT = 4; // n회 이상 튀면 FLT_MAX 처리
@@ -25,8 +125,8 @@ static const uint16_t PCA_FREQ_HZ = 50;
 static const uint8_t  MOTOR_CH1   = 0;
 static const uint8_t  MOTOR_CH2   = 1;
 
-static const uint16_t SERVO_MIN_US = 500;
-static const uint16_t SERVO_MAX_US = 2500;
+static const uint16_t SERVO_MIN_US = 900;
+static const uint16_t SERVO_MAX_US = 2100;
 
 static const float    SERVO_NEUTRAL_DEG1 = 65.0f;  //검정핀
 static const float    SERVO_NEUTRAL_DEG2 = 104.0f;  //흰색핀
@@ -214,6 +314,21 @@ void setup() {
 
 
 void loop() {
+
+  
+  pollB2A(Serial3);
+
+  if (g_parachuteFromB) {
+    releaseServosOnce();
+    // 낙하산 이후에는 제어 로직 자체를 안 돌게 막기
+    // (writeServoDeg가 어디서든 호출되면 다시 붙음)
+    return;
+  }
+
+  // ---- 여기 아래부터 기존 IMU / PID / writeServoDeg 로직 ----
+
+
+
   // ================= IMU 자동 복구 로직 =================
   
   // 1. 데이터 읽기 시도
@@ -378,6 +493,9 @@ void loop() {
     
   }
   
+
+  
+
 
   // ====== 시리얼 출력 ======
   // uint32_t nowMs = millis();
