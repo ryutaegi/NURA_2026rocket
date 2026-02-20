@@ -204,17 +204,6 @@ void Adafruit_Mahony::updateIMU(float gx, float gy, float gz, float ax,
   anglesComputed = 0;
 }
 
-//dt입력 없을 때 사용
-void Adafruit_Mahony::update(float gx, float gy, float gz, float ax, float ay,
-                             float az, float mx, float my, float mz) {
-  update(gx, gy, gz, ax, ay, az, mx, my, mz, invSampleFreq);
-}
-
-void Adafruit_Mahony::updateIMU(float gx, float gy, float gz, float ax,
-                                float ay, float az) {
-  updateIMU(gx, gy, gz, ax, ay, az, invSampleFreq);
-};
-
 
 // 역제곱근 함수
 float Adafruit_Mahony::invSqrt(float x) {

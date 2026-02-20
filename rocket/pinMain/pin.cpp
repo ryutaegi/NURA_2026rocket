@@ -2,8 +2,9 @@
 #include "Adafruit_AHRS_Mahony.h"
 #include "Adafruit_AHRS_Madgwick.h"
 
-Adafruit_Mahony mahony; 
-Adafruit_Madgwick mss;
+Adafruit_Mahony mahony6; 
+Adafruit_Mahony mahony9; 
+
 // ======================= 자이로 캘리브레이션 변수 =======================
 static bool gyro_calibrating = false;
 static float gx_bias = 0.5665f, gy_bias = -0.9579f, gz_bias = 0.0773f;
@@ -50,6 +51,7 @@ uint32_t lastMicros = 0;
 float earth_roll = 0.0f;
 float earth_pitch = 0.0f;
 float earth_yaw = 0.0f;
+float sensor_yaw = 0.0f;
 
 // ======================= I2C 스캔 함수 =======================
 
@@ -156,37 +158,35 @@ void processIMU()
     imuData.gz = rad2deg(gz);
 
     
-    mahony.updateIMU(gx, gy, gz, ax, ay, az, dt);
-    mahony.computeAngles();
-    earth_roll  = mahony.roll  ;   // rad → deg
-    earth_pitch = mahony.pitch ;
-    earth_yaw   = mahony.yaw   ;
-  
-  Serial.print(-100); 
-    Serial.print(",");//Serial.println(F("//"));
-    Serial.print(100); //Serial.println(F("//"));
-    Serial.print(","); //Serial.println(F("//"));
-    Serial.print(earth_yaw, 2);Serial.print("//"); //Serial.println(F("//"));
-     Serial.print(imuData.gx);  Serial.print("//");
-  Serial.print(imuData.gy); Serial.print("//");
-  Serial.println(imuData.gz); 
+    mahony6.updateIMU(gx, gy, gz, ax, ay, az, dt);
+    mahony6.computeAngles();
+ 
+    sensor_yaw   = mahony6.yaw   ;
+    flightData.filterRoll = sensor_yaw ;
+    //Serial.print(sensor_yaw);Serial.print("//");
+    //Serial.print( flightData.filterRoll);Serial.print("//");
     //Serial.print(earth_roll, 2); Serial.print(F("//"));
     //Serial.print(earth_pitch, 2);  Serial.print(F("//"));
     //Serial.print(earth_yaw, 2); Serial.println(F("//"));
-/*
-    mahony.update(gx, gy, gz, ax, ay, az, mx, my, mz, dt);
-    mahony.computeAngles();
+
+    mahony9.update(gx, gy, gz, ax, ay, az, mx, my, mz, dt);
+    mahony9.computeAngles();
     
-    earth_roll  = mahony.roll  ;   // rad → deg
-    earth_pitch = mahony.pitch ;
-    earth_yaw   = mahony.yaw   ;
+    earth_roll  = mahony9.roll  ;   // rad → deg
+    earth_pitch = mahony9.pitch ;
+    earth_yaw   = mahony9.yaw   ;
+
+    // flightData에 저장
+    flightData.roll  = earth_roll;
+    flightData.pitch = earth_pitch;
+    flightData.yaw   = earth_yaw;
+ // Serial.println( earth_yaw);
   
-  */
 
     // Earth 각도 추출
    
 
- 
+ /*
     
    // Serial.print(earth_roll, 2); Serial.print(F("//"));
     //Serial.print(earth_pitch, 2);  Serial.print(F("//"));
@@ -228,14 +228,9 @@ if (gyro_calibrating) {
     }
     return;  // 캘리브레이션 중에는 일반 IMU 처리 스킵
 }
+*/
 
 
-
-
-    // flightData에 저장
-    flightData.roll  = earth_roll;
-    flightData.pitch = earth_pitch;
-    flightData.yaw   = earth_yaw;
 
 /*
     icm_20948_DMP_data_t data;
@@ -257,7 +252,7 @@ if (gyro_calibrating) {
                 earth_yaw
             );
 
-            flightData.filterRoll = earth_yaw;
+            
            
         }
 
@@ -288,9 +283,7 @@ if (gyro_calibrating) {
         delay(10);
     }
 */
-    flightData.imu = imuData;
-
-
+  
     uint32_t nowMs = millis();
     if (nowMs - lastPrint >= PRINT_PERIOD_MS) {
         lastPrint = nowMs;
@@ -301,6 +294,8 @@ if (gyro_calibrating) {
        // Serial.println(flightData.filterRoll,2); 
         //Serial.println(wGyro);
     }
-    
+      flightData.imu = imuData;
+
+
 
 }

@@ -25,8 +25,8 @@ static const uint8_t  MOTOR_CH2   = 1;
 static const uint16_t SERVO_MIN_US = 500;
 static const uint16_t SERVO_MAX_US = 2500;
 
-static const float   SERVO_NEUTRAL_DEG1 = 65.0f;  //검정핀
-static const float   SERVO_NEUTRAL_DEG2 = 104.0f;  //흰색핀
+static const float   SERVO_NEUTRAL_DEG1 = 91.7f;  //흰
+static const float   SERVO_NEUTRAL_DEG2 = 83.5f;  //검
 
 // [설정] 서보 물리적 제한 각도
 static const float    MAX_SERVO_LIMIT = 90.0f; 
@@ -146,6 +146,7 @@ void setup() {
   pca9685.setPWMFreq(PCA_FREQ_HZ);
   delay(10);
   
+
   writeServoDeg(MOTOR_CH1, SERVO_NEUTRAL_DEG1);
   writeServoDeg(MOTOR_CH2, SERVO_NEUTRAL_DEG2);
 
@@ -312,12 +313,12 @@ void loop() {
     // -180 ~ 0 → -10 ~ 0
     int servoOffset = fmap(yaw_deg, -360.0f, 0.0f, -MAX_SERVO_LIMIT, 0.0f);
     servoOffset1 = -servoOffset;
-    servoOffset2 = -servoOffset1;  // 반대 방향 보정
+    servoOffset2 = servoOffset1;  // 반대 방향 보정
   } else {
     // 0 ~ 180 → 0 ~ +10
     int servoOffset = fmap(yaw_deg, 0.0f, 360.0f, 0.0f, MAX_SERVO_LIMIT);
     servoOffset1 = -servoOffset;
-    servoOffset2 = -servoOffset1;  // 반대 방향 보정
+    servoOffset2 = servoOffset1;  // 반대 방향 보정
   }
   
   // 최종 서보 각도 계산 및 클램프
@@ -335,9 +336,9 @@ void loop() {
   writeServoDeg(MOTOR_CH2, servoDeg2);
   
   // 디버그 출력
- // Serial.print("Yaw: "); Serial.print(yaw_deg, 1);
- // Serial.print(" Servo1: "); Serial.print(servoDeg1, 1);
- // Serial.print(" Servo2: "); Serial.println(servoDeg2, 1);
+  Serial.print("Yaw: "); Serial.print(flightData.filterRoll, 1);
+  Serial.print(" Servo1: "); Serial.print(servoDeg1, 1);
+  Serial.print(" Servo2: "); Serial.println(servoDeg2, 1);
 
   }
 

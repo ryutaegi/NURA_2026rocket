@@ -43,14 +43,18 @@ void sweepOnce()
   // 스윕 
   writeServoDeg(MOTOR_CH1, startDeg1);
   writeServoDeg(MOTOR_CH2, startDeg2);
+  delay(500);
+   writeServoDeg(MOTOR_CH1, SERVO_NEUTRAL_DEG1);
+  writeServoDeg(MOTOR_CH2, SERVO_NEUTRAL_DEG2);
+  delay(500);
   writeServoDeg(MOTOR_CH1, endDeg1);
   writeServoDeg(MOTOR_CH2, endDeg2);
-
+delay(500);
 
   // 최종 중립 고정
   writeServoDeg(MOTOR_CH1, SERVO_NEUTRAL_DEG1);
   writeServoDeg(MOTOR_CH2, SERVO_NEUTRAL_DEG2);
-  delay(10);
+  delay(500);
 }
 
 // [추가 기능] IMU 설정 로직을 함수로 분리 (Setup과 Loop에서 재사용하기 위해)
