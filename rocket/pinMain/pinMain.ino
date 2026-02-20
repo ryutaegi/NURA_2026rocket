@@ -308,15 +308,15 @@ void loop() {
 
   prev_yaw = yaw_deg; 
 
-    int servoOffset1, servoOffset2;
+    float servoOffset1, servoOffset2;
  if (yaw_deg <= 0.0f) {
     // -180 ~ 0 → -10 ~ 0
-    int servoOffset = fmap(yaw_deg, -360.0f, 0.0f, -MAX_SERVO_LIMIT, 0.0f);
+    float servoOffset = fmap(yaw_deg, -360.0f, 0.0f, -MAX_SERVO_LIMIT, 0.0f);
     servoOffset1 = -servoOffset;
     servoOffset2 = servoOffset1;  // 반대 방향 보정
   } else {
     // 0 ~ 180 → 0 ~ +10
-    int servoOffset = fmap(yaw_deg, 0.0f, 360.0f, 0.0f, MAX_SERVO_LIMIT);
+    float servoOffset = fmap(yaw_deg, 0.0f, 360.0f, 0.0f, MAX_SERVO_LIMIT);
     servoOffset1 = -servoOffset;
     servoOffset2 = servoOffset1;  // 반대 방향 보정
   }
