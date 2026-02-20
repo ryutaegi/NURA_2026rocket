@@ -221,6 +221,7 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
       const data = lastMessage.data;
 
       if (data.parachuteStatus == 2) {
+        playSound("/sounds/ssagal.mp3");
         toast.success(data.message || '비상 사출 명령을 성공적으로 전송했습니다.');
       }
 
