@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 
-const WS_URL = 'ws://localhost:3001';
+const DEFAULT_WS_URL = 'ws://localhost:3001';
 
 export interface WebSocketMessage {
   type: string;
   data?: any;
-  recordingId?: string;
-  record?: any;
-  records?: any[];
+  [key: string]: any; // Allow additional fields
 }
 
 export function useWebSocket() {
@@ -16,8 +14,11 @@ export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    // WebSocket 연결
-    const ws = new WebSocket(WS_URL);
+    // 환경 변수 또는 로컬 스토리지에서 URL 가져오기 (배포 시 유연성 확보)
+    const wsUrl = import.meta.env.VITE_WS_URL || localStorage.getItem('ws_url') || DEFAULT_WS_URL;
+
+    console.log(`WebSocket 연결 시도: ${wsUrl}`);
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -41,6 +42,8 @@ export function useWebSocket() {
     ws.onclose = () => {
       console.log('WebSocket 연결 종료');
       setIsConnected(false);
+      // 자동 재연결 로직 (선택 사항)
+      // setTimeout(() => { ... }, 3000);
     };
 
     return () => {

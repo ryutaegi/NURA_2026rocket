@@ -1,62 +1,94 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Rocket, MapPin, History } from 'lucide-react';
+import { Rocket, MapPin, History, Menu, X } from 'lucide-react';
 import MainPage from './components/MainPage';
 import RecoveryPage from './components/RecoveryPage';
 import LaunchHistoryPage from './components/LaunchHistoryPage';
 
 function Navigation() {
   const location = useLocation();
-  
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
   const isActive = (path: string) => location.pathname === path;
-  
+
+  const NavLink = ({ to, icon: Icon, children }: { to: string, icon: any, children: React.ReactNode }) => (
+    <Link
+      to={to}
+      onClick={() => setIsMenuOpen(false)}
+      className={`inline-flex items-center px-4 py-2 border-b-2 transition-colors ${isActive(to)
+        ? 'border-blue-500 text-white'
+        : 'border-transparent text-gray-400 hover:text-white hover:border-gray-300'
+        }`}
+    >
+      <Icon className="h-5 w-5 mr-2" />
+      {children}
+    </Link>
+  );
+
+  const MobileNavLink = ({ to, icon: Icon, children }: { to: string, icon: any, children: React.ReactNode }) => (
+    <Link
+      to={to}
+      onClick={() => setIsMenuOpen(false)}
+      className={`flex items-center px-4 py-3 rounded-lg text-base font-medium transition-colors ${isActive(to)
+        ? 'bg-blue-600 text-white'
+        : 'text-gray-300 hover:bg-gray-800'
+        }`}
+    >
+      <Icon className="h-5 w-5 mr-3" />
+      {children}
+    </Link>
+  );
+
   return (
-    <nav className="bg-gray-900 border-b border-gray-800">
+    <nav className="bg-gray-900 border-b border-gray-800 sticky top-0 z-50 w-full overflow-hidden">
+      <style>{`
+        @media (min-width: 768px) {
+          .desktop-only { display: flex !important; }
+          .mobile-only { display: none !important; }
+        }
+        @media (max-width: 767px) {
+          .desktop-only { display: none !important; }
+          .mobile-only { display: flex !important; }
+        }
+      `}</style>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
-          <div className="flex">
+          <div className="flex w-full justify-between items-center">
             <div className="flex-shrink-0 flex items-center">
-              <Rocket className="h-8 w-8 text-blue-500" />
-              <span className="ml-2 text-xl text-white">MACH1n(e)</span>
+              <span className="text-2xl font-black text-white tracking-tighter">MACH1n(e)</span>
             </div>
-            <div className="ml-6 flex space-x-4">
-              <Link
-                to="/"
-                className={`inline-flex items-center px-4 py-2 border-b-2 ${
-                  isActive('/')
-                    ? 'border-blue-500 text-white'
-                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-300'
-                }`}
-              >
-                <Rocket className="h-5 w-5 mr-2" />
-                메인
-              </Link>
-              <Link
-                to="/recovery"
-                className={`inline-flex items-center px-4 py-2 border-b-2 ${
-                  isActive('/recovery')
-                    ? 'border-blue-500 text-white'
-                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-300'
-                }`}
-              >
-                <MapPin className="h-5 w-5 mr-2" />
-                로켓 회수
-              </Link>
-              <Link
-                to="/history"
-                className={`inline-flex items-center px-4 py-2 border-b-2 ${
-                  isActive('/history')
-                    ? 'border-blue-500 text-white'
-                    : 'border-transparent text-gray-400 hover:text-white hover:border-gray-300'
-                }`}
-              >
-                <History className="h-5 w-5 mr-2" />
-                발사 기록
-              </Link>
+
+            {/* Navigation Right Side */}
+            <div className="flex items-center">
+              {/* Desktop Menu */}
+              <div className="desktop-only md:items-center md:space-x-4">
+                <NavLink to="/" icon={Rocket}>메인</NavLink>
+                <NavLink to="/recovery" icon={MapPin}>로켓 회수</NavLink>
+                <NavLink to="/history" icon={History}>발사 기록</NavLink>
+              </div>
+
+              {/* Mobile Menu Button */}
+              <div className="mobile-only items-center ml-2">
+                <button
+                  onClick={() => setIsMenuOpen(!isMenuOpen)}
+                  className="text-gray-400 hover:text-white p-2 rounded-md focus:outline-none transition-colors"
+                >
+                  {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Mobile Menu Overlay */}
+      {isMenuOpen && (
+        <div className="mobile-only flex-col bg-gray-900 border-b border-gray-800 px-2 pt-2 pb-3 space-y-1 shadow-2xl animate-in slide-in-from-top duration-200 w-full">
+          <MobileNavLink to="/" icon={Rocket}>메인</MobileNavLink>
+          <MobileNavLink to="/recovery" icon={MapPin}>로켓 회수</MobileNavLink>
+          <MobileNavLink to="/history" icon={History}>발사 기록</MobileNavLink>
+        </div>
+      )}
     </nav>
   );
 }
@@ -76,7 +108,7 @@ export default function App() {
         setEmergencyEjection(true);
         console.log('Emergency ejection triggered!');
         // For now, reset after a short delay or when action is acknowledged
-        setTimeout(() => setEmergencyEjection(false), 2000); 
+        setTimeout(() => setEmergencyEjection(false), 2000);
       }
     };
 
