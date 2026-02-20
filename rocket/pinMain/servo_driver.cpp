@@ -40,35 +40,17 @@ void sweepOnce()
   const float endDeg2   = SERVO_NEUTRAL_DEG2 + STARTUP_SWEEP_OFFSET_DEG; // 180
 
 
-  // 시작 위치(0도)로 이동 후 잠깐 대기
+  // 스윕 
   writeServoDeg(MOTOR_CH1, startDeg1);
   writeServoDeg(MOTOR_CH2, startDeg2);
-  delay(300);
+  writeServoDeg(MOTOR_CH1, endDeg1);
+  writeServoDeg(MOTOR_CH2, endDeg2);
 
-  // 0 -> 180 스윕
-  for (float d = startDeg1; d <= endDeg1; d += STARTUP_SWEEP_STEP_DEG) {
-    writeServoDeg(MOTOR_CH1, d);
-     delay(15);
-  }
-  for (float d = startDeg2; d <= endDeg2; d += STARTUP_SWEEP_STEP_DEG) {
-    writeServoDeg(MOTOR_CH2, d);
-     delay(15);
-  }
-
-  // 180 -> 90(중립) 복귀 (원하면 180->0까지 왕복도 가능)
-  for (float d = endDeg1; d >= SERVO_NEUTRAL_DEG1; d -= STARTUP_SWEEP_STEP_DEG) {
-    writeServoDeg(MOTOR_CH1, d);
-     delay(15);
-  }
-  for (float d = endDeg2; d >= SERVO_NEUTRAL_DEG2; d -= STARTUP_SWEEP_STEP_DEG) {
-    writeServoDeg(MOTOR_CH2, d);
-     delay(15);
-  }
 
   // 최종 중립 고정
   writeServoDeg(MOTOR_CH1, SERVO_NEUTRAL_DEG1);
   writeServoDeg(MOTOR_CH2, SERVO_NEUTRAL_DEG2);
-  delay(300);
+  delay(10);
 }
 
 // [추가 기능] IMU 설정 로직을 함수로 분리 (Setup과 Loop에서 재사용하기 위해)

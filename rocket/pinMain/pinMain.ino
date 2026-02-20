@@ -7,148 +7,37 @@
 
 #define PIN_CONNECT_DETECT 2
 
-// ===== B -> A parachute status receiver =====     10번에서 74번 줄까지 낙하산 사출 여부
-static const uint8_t B2A_SYNC1 = 0xB5;
-static const uint8_t B2A_SYNC2 = 0x5B;
-static const uint8_t B2A_VER   = 1;
-static const uint8_t B2A_MSG   = 0x31;
-static const uint8_t B2A_LEN   = 6;
-
-static bool g_servoReleased = false; //서보 상태 변경 정의
-
-bool g_parachuteFromB = false;
-
-void pollB2A(Stream& link) {
-  enum { WAIT_S1, WAIT_S2, READ_HDR, READ_PAYLOAD } static st = WAIT_S1;
-
-  static uint8_t hdr[5];
-  static uint8_t payload[B2A_LEN];
-  static uint8_t crcBytes[2];
-  static uint8_t idx = 0;
-
-  while (link.available()) {
-    uint8_t b = link.read();
-
-    switch (st) {
-      case WAIT_S1:
-        if (b == B2A_SYNC1) st = WAIT_S2;
-        break;
-
-      case WAIT_S2:
-        if (b == B2A_SYNC2) {
-          st = READ_HDR;
-          idx = 0;
-        } else st = WAIT_S1;
-        break;
-
-      case READ_HDR:
-        hdr[idx++] = b;
-        if (idx >= 5) {
-          if (hdr[0] != B2A_VER || hdr[1] != B2A_MSG || hdr[2] != B2A_LEN) {
-            st = WAIT_S1;
-            break;
-          }
-          idx = 0;
-          st = READ_PAYLOAD;
-        }
-        break;
-
-      case READ_PAYLOAD:
-        if (idx < B2A_LEN) {
-          payload[idx++] = b;
-        } else if (idx < B2A_LEN + 2) {
-          crcBytes[idx - B2A_LEN] = b;
-          idx++;
-        }
-
-        if (idx >= B2A_LEN + 2) {
-          // ⚠ CRC 생략 버전 (디버깅용)
-          g_parachuteFromB = (payload[0] == 1);
-
-          Serial.print("RECV B->A parachute=");
-          Serial.println(g_parachuteFromB);
-
-          st = WAIT_S1;
-        }
-        break;
-    }
-  }
-}
-
-//서보 모터 제어 해제
-static void pcaWrite8(uint8_t i2cAddr, uint8_t reg, uint8_t data) {
-  WIRE_PORT.beginTransmission(i2cAddr);
-  WIRE_PORT.write(reg);
-  WIRE_PORT.write(data);
-  WIRE_PORT.endTransmission();
-}
-
-void servoDetachPCA(uint8_t ch) {
-  const uint8_t PCA_ADDR = 0x40;
-  uint8_t reg = 0x06 + 4 * ch;     // LEDn_ON_L base
-  pcaWrite8(PCA_ADDR, reg + 3, 0x10); // LEDn_OFF_H: FULL_OFF bit(4)=1
-}
-// 채널 출력 완전 OFF (FULL_OFF bit)
-static void releaseServosOnce() {
-  if (g_servoReleased) return;
-
-  // 먼저 중립 한 번 보내고(선택), 잠깐 기다린 뒤 OFF
-  writeServoDeg(MOTOR_CH1, SERVO_NEUTRAL_DEG1);
-  writeServoDeg(MOTOR_CH2, SERVO_NEUTRAL_DEG2);
-  delay(50);
-
-  servoDetachPCA(MOTOR_CH1);
-  servoDetachPCA(MOTOR_CH2);
-
-  g_servoReleased = true;
-  Serial.println("Servo released (FULL_OFF)");
-}
-
-
-
-
 // [Spike Filter 변수]
 static int      spikeCounter = 0;
 static const int MAX_SPIKE_COUNT = 4; // n회 이상 튀면 FLT_MAX 처리
-
 // 각 축별 임계값
 static const float ACCEL_AXIS_LIMIT = 15500.0f; //15.5g
-
-
 
 // ======================= PCA9685 설정 =======================
 Adafruit_PWMServoDriver pca9685 = Adafruit_PWMServoDriver(0x40);
 static const float STARTUP_SWEEP_OFFSET_DEG = 45.0f; 
-static const float STARTUP_SWEEP_STEP_DEG   = 2.0f;  
+
 static const uint16_t PCA_FREQ_HZ = 50;
 
 static const uint8_t  MOTOR_CH1   = 0;
 static const uint8_t  MOTOR_CH2   = 1;
 
-static const uint16_t SERVO_MIN_US = 900;
-static const uint16_t SERVO_MAX_US = 2100;
+static const uint16_t SERVO_MIN_US = 500;
+static const uint16_t SERVO_MAX_US = 2500;
 
-static const float    SERVO_NEUTRAL_DEG1 = 65.0f;  //검정핀
-static const float    SERVO_NEUTRAL_DEG2 = 104.0f;  //흰색핀
+static const float   SERVO_NEUTRAL_DEG1 = 65.0f;  //검정핀
+static const float   SERVO_NEUTRAL_DEG2 = 104.0f;  //흰색핀
 
 // [설정] 서보 물리적 제한 각도
 static const float    MAX_SERVO_LIMIT = 90.0f; 
 
-// [설정] PID 최대 출력
-static const float    PID_OUTPUT_MAX  = 90.0f;
-
-static const float MOTOR_DIR = +1.0f;
-
-// 1. 단축 거리 추가 (static 변수 loop() 맨 위)
+// 이전yaw  
 static float prev_yaw = 0.0f;
 
 
-// ======================= 발사 감지 설정 =======================
-
-bool isFlying = false;  
-
 // ======================= PID 설정 =======================
-PIDController pid(1.2f, 0.01f, 0.08f);
+PIDController pid1(1.2f, 0.01f, 0.08f);
+PIDController pid2(1.2f, 0.01f, 0.08f);
 
 // ======================= 타이밍 =======================
 static uint32_t lastPidUs = 0;
@@ -158,8 +47,6 @@ static uint32_t lastDbgMs = 0;
 static uint32_t lastImuDataMs = 0;      // 마지막으로 데이터 들어온 시간
 static uint32_t lastResetAttemptMs = 0; // 마지막 리셋 시도 시간
 static bool     isImuHealthy = false;   // 센서 건강 상태
-static int      frozenCount = 0;        // 데이터 고정 카운트
-static float    prevAx = 0, prevAy = 0, prevAz = 0; // 고정 감지용 이전 값
 
 // AtoB 데이터 UART송신(추가)
 // 패킷 내용
@@ -248,7 +135,7 @@ void sendAtoB() {
 void setup() {
   Serial.begin(115200);
   Serial3.begin(115200); 
-  delay(200);
+  delay(100);
 
   WIRE_PORT.begin();
   WIRE_PORT.setClock(400000);
@@ -274,7 +161,7 @@ void setup() {
     writeServoDeg(MOTOR_CH1, SERVO_NEUTRAL_DEG1);
     writeServoDeg(MOTOR_CH2, SERVO_NEUTRAL_DEG2);
   }
-  
+ 
   //  분리한 설정 함수 호출
   bool ok = false;
   while(!ok){
@@ -287,7 +174,7 @@ void setup() {
       Serial.println(myICM.statusString());
       delay(500);
     }
-    bool success = true;
+  /* bool success = true;
   success &= (myICM.initializeDMP() == ICM_20948_Stat_Ok);
 
   success &= (myICM.enableDMPSensor(INV_ICM20948_SENSOR_GAME_ROTATION_VECTOR) == ICM_20948_Stat_Ok);
@@ -302,33 +189,17 @@ void setup() {
   success &= (myICM.enableDMP() == ICM_20948_Stat_Ok);
   success &= (myICM.resetDMP() == ICM_20948_Stat_Ok);
   success &= (myICM.resetFIFO() == ICM_20948_Stat_Ok);
-  }
+  }*/
 
   lastMicros = micros();
   lastPidUs = micros();
-  pid.reset();
 
-  
+  pid1.reset();
+ pid2.reset();
+}
 }
 
-
-
 void loop() {
-
-  
-  pollB2A(Serial3);
-
-  if (g_parachuteFromB) {
-    releaseServosOnce();
-    // 낙하산 이후에는 제어 로직 자체를 안 돌게 막기
-    // (writeServoDeg가 어디서든 호출되면 다시 붙음)
-    return;
-  }
-
-  // ---- 여기 아래부터 기존 IMU / PID / writeServoDeg 로직 ----
-
-
-
   // ================= IMU 자동 복구 로직 =================
   
   // 1. 데이터 읽기 시도
@@ -375,9 +246,8 @@ void loop() {
        WIRE_PORT.setClock(400000);
 
       if (configureIMU()) {
-        Serial.println(F("IMU Recovered!"));
+      
         isImuHealthy = true;
-        frozenCount = 0;
         lastImuDataMs = millis();
         
        
@@ -426,20 +296,6 @@ void loop() {
     float dt = (nowUs - lastPidUs) * 1e-6f;
     lastPidUs = nowUs;
 
-    if (dt <= 0.0f || dt > 0.2f) {
-      // dt 오류 시 현상 유지 혹은 중립
-      return;
-    }
-
-    // 목표: 각속도 0 (스핀 억제)
-    float gyroZ_dps = rad2deg(gz_f);
-    float target_dps = 0.0f;
-    float error = (target_dps - gyroZ_dps);
-
-
-    // PID 계산
-    float pidOut = pid.compute(error, dt);
-
 
     // yaw를 -180~180 범위로 정규화
   float yaw_deg = wrap720_deg(flightData.filterRoll);  // 0~360
@@ -451,34 +307,37 @@ void loop() {
 
   prev_yaw = yaw_deg; 
 
-    float servoOffset1, servoOffset2;
+    int servoOffset1, servoOffset2;
  if (yaw_deg <= 0.0f) {
     // -180 ~ 0 → -10 ~ 0
-    servoOffset1 = fmap(yaw_deg, -360.0f, 0.0f, -MAX_SERVO_LIMIT, 0.0f);
-    servoOffset2 = servoOffset1;  // 반대 방향 보정
+    int servoOffset = fmap(yaw_deg, -360.0f, 0.0f, -MAX_SERVO_LIMIT, 0.0f);
+    servoOffset1 = -servoOffset;
+    servoOffset2 = -servoOffset1;  // 반대 방향 보정
   } else {
     // 0 ~ 180 → 0 ~ +10
-    servoOffset1 = fmap(yaw_deg, 0.0f, 360.0f, 0.0f, MAX_SERVO_LIMIT);
-    servoOffset2 = servoOffset1;  // 반대 방향 보정
+    int servoOffset = fmap(yaw_deg, 0.0f, 360.0f, 0.0f, MAX_SERVO_LIMIT);
+    servoOffset1 = -servoOffset;
+    servoOffset2 = -servoOffset1;  // 반대 방향 보정
   }
   
   // 최종 서보 각도 계산 및 클램프
   float servoDeg1 = SERVO_NEUTRAL_DEG1 + servoOffset1;
   float servoDeg2 = SERVO_NEUTRAL_DEG2 + servoOffset2;
- 
+  
   
   // 안전 범위 제한 (±10° 고정)
   servoDeg1 = constrain(servoDeg1, SERVO_NEUTRAL_DEG1 - MAX_SERVO_LIMIT, SERVO_NEUTRAL_DEG1 + MAX_SERVO_LIMIT);
   servoDeg2 = constrain(servoDeg2, SERVO_NEUTRAL_DEG2 - MAX_SERVO_LIMIT, SERVO_NEUTRAL_DEG2 + MAX_SERVO_LIMIT);
   
+
   // 서보 출력
   writeServoDeg(MOTOR_CH1, servoDeg1);
   writeServoDeg(MOTOR_CH2, servoDeg2);
   
   // 디버그 출력
-  Serial.print("Yaw: "); Serial.print(yaw_deg, 1);
-  Serial.print(" Servo1: "); Serial.print(servoDeg1, 1);
-  Serial.print(" Servo2: "); Serial.println(servoDeg2, 1);
+ // Serial.print("Yaw: "); Serial.print(yaw_deg, 1);
+ // Serial.print(" Servo1: "); Serial.print(servoDeg1, 1);
+ // Serial.print(" Servo2: "); Serial.println(servoDeg2, 1);
 
   }
 
@@ -490,18 +349,10 @@ void loop() {
   if (now - lastTx >= 10) {
     lastTx += 10;
     sendAtoB();
-    
+  
   }
-  
+  //Serial.print(imuData.gx);  Serial.print("//");
+  //Serial.print(imuData.gy); Serial.print("//");
+  //Serial.println(imuData.gz); Serial.print("//");
 
-  
-
-
-  // ====== 시리얼 출력 ======
-  // uint32_t nowMs = millis();
-  // if (nowMs - lastDbgMs >= 50) {
-  //   lastDbgMs = nowMs;
-    // Serial.print("G:"); Serial.print(gyroZ_dps);
-    // Serial.print(" S:"); Serial.println(servoDeg);
-  //}
 }

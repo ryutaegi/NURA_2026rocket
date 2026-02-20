@@ -8,7 +8,7 @@ extern const float SERVO_NEUTRAL_DEG1;
 extern const float SERVO_NEUTRAL_DEG2;
 extern const float STARTUP_SWEEP_OFFSET_DEG;
 extern const float STARTUP_SWEEP_STEP_DEG;
-
+static float prev_unwrapped_yaw = 0.0f; 
 extern const uint8_t MOTOR_CH1;
 extern const uint8_t MOTOR_CH2;
 

@@ -1,4 +1,16 @@
 #include "pin.h"
+#include "Adafruit_AHRS_Mahony.h"
+#include "Adafruit_AHRS_Madgwick.h"
+
+Adafruit_Mahony mahony; 
+Adafruit_Madgwick mss;
+// ======================= 자이로 캘리브레이션 변수 =======================
+static bool gyro_calibrating = false;
+static float gx_bias = 0.5665f, gy_bias = -0.9579f, gz_bias = 0.0773f;
+static float gx_sum = 0.0f, gy_sum = 0.0f, gz_sum = 0.0f;
+static uint32_t gyro_sample_count = 0;
+const uint32_t GYRO_CAL_SAMPLES = 30000;
+
 
 // ======================= IMU 설정 =======================
 ICM_20948_I2C myICM;
@@ -9,7 +21,6 @@ const float LPF_K = 0.20f;
 
 ImuData imuData = {};
 FlightData flightData = {};
-
 const float MAG_BIAS_X = 0.0f;
 const float MAG_BIAS_Y = 0.0f;
 const float MAG_BIAS_Z = 0.0f;
@@ -41,53 +52,16 @@ float earth_pitch = 0.0f;
 float earth_yaw = 0.0f;
 
 // ======================= I2C 스캔 함수 =======================
-void scanI2C() {
-    byte error, address;
-    int nDevices = 0;
 
-    Serial.println("\n→ I2C 장치 스캔 중...");
-
-    for (address = 1; address < 127; address++) {
-        WIRE_PORT.beginTransmission(address);
-        error = WIRE_PORT.endTransmission();
-
-        if (error == 0) {
-            Serial.print("  I2C 장치 발견: 0x");
-            if (address < 16) Serial.print("0");
-            Serial.println(address, HEX);
-            nDevices++;
-        }
-    }
-
-    if (nDevices == 0) {
-        Serial.println("  I2C 장치 없음! 연결 확인하세요.");
-    }
-    else {
-        Serial.print("  총 ");
-        Serial.print(nDevices);
-        Serial.println("개 장치 발견");
-    }
-}
 
 // ======================= IMU 초기화 =======================
 bool initializeIMU()
 {
-    Serial.println("\n  [1] I2C 초기화 중...");
+   
     WIRE_PORT.begin();
+     
     delay(200);
-    Serial.println("      → I2C 초기화 완료");
-
-    Serial.print("  [2] ICM_20948 탐색 중 (AD0=");
-    Serial.print(AD0_VAL);
-    Serial.println(")...");
-
-    if (!myICM.begin(WIRE_PORT, AD0_VAL)) {
-        Serial.println("      → 실패! I2C 스캔 결과:");
-        scanI2C();
-        return false;
-    }
-
-    Serial.println("      → ICM_20948 발견됨");
+   
     return true;
 }
 
@@ -100,16 +74,18 @@ static inline float ACC_X() { return myICM.accX(); }
 static inline float ACC_Y() { return myICM.accY(); }
 static inline float ACC_Z() { return myICM.accZ(); }
 
-static inline float GYR_X_DPS() { return myICM.gyrX(); }
-static inline float GYR_Y_DPS() { return myICM.gyrY(); }
-static inline float GYR_Z_DPS() { return myICM.gyrZ(); }
+// ======================= 축 매핑 (바이어스 적용) =======================
+static inline float GYR_X_DPS() { return myICM.gyrX() - gx_bias; }
+static inline float GYR_Y_DPS() { return myICM.gyrY() - gy_bias; }
+static inline float GYR_Z_DPS() { return myICM.gyrZ() - gz_bias; }
+
 
 static inline float MAG_X() { return myICM.magX(); }
 static inline float MAG_Y() { return myICM.magY(); }
 static inline float MAG_Z() { return myICM.magZ(); }
 
 // ======================= 계산 함수 =======================
-void calculateEulerAngles(long q1_raw, long q2_raw, long q3_raw, float& roll, float& pitch, float& yaw) {
+/* void calculateEulerAngles(long q1_raw, long q2_raw, long q3_raw, float& roll, float& pitch, float& yaw) {
 
     double q1 = ((double)q1_raw) / 1073741824.0;
     double q2 = ((double)q2_raw) / 1073741824.0;
@@ -136,7 +112,7 @@ void calculateEulerAngles(long q1_raw, long q2_raw, long q3_raw, float& roll, fl
     double t3 = +2.0 * (qw * qz + qx * qy);
     double t4 = +1.0 - 2.0 * (qy * qy + qz * qz);
     yaw = atan2(t3, t4) * 180.0 / PI;
-}
+}*/
 
 
 // ======================= 메인 IMU 처리 =======================
@@ -175,14 +151,97 @@ void processIMU()
     imuData.ay = ay_f;
     imuData.az = az_f;
 
-    imuData.gx = rad2deg(gx_f);  // 라디안을 도(deg)로 변환
-    imuData.gy = rad2deg(gy_f);
-    imuData.gz = rad2deg(gz_f);
+    imuData.gx = rad2deg(gx);  // 라디안을 도(deg)로 변환
+    imuData.gy = rad2deg(gy);
+    imuData.gz = rad2deg(gz);
 
+    
+    mahony.updateIMU(gx, gy, gz, ax, ay, az, dt);
+    mahony.computeAngles();
+    earth_roll  = mahony.roll  ;   // rad → deg
+    earth_pitch = mahony.pitch ;
+    earth_yaw   = mahony.yaw   ;
+  
+  Serial.print(-100); 
+    Serial.print(",");//Serial.println(F("//"));
+    Serial.print(100); //Serial.println(F("//"));
+    Serial.print(","); //Serial.println(F("//"));
+    Serial.print(earth_yaw, 2);Serial.print("//"); //Serial.println(F("//"));
+     Serial.print(imuData.gx);  Serial.print("//");
+  Serial.print(imuData.gy); Serial.print("//");
+  Serial.println(imuData.gz); 
+    //Serial.print(earth_roll, 2); Serial.print(F("//"));
+    //Serial.print(earth_pitch, 2);  Serial.print(F("//"));
+    //Serial.print(earth_yaw, 2); Serial.println(F("//"));
+/*
+    mahony.update(gx, gy, gz, ax, ay, az, mx, my, mz, dt);
+    mahony.computeAngles();
+    
+    earth_roll  = mahony.roll  ;   // rad → deg
+    earth_pitch = mahony.pitch ;
+    earth_yaw   = mahony.yaw   ;
+  
+  */
+
+    // Earth 각도 추출
+   
+
+ 
+    
+   // Serial.print(earth_roll, 2); Serial.print(F("//"));
+    //Serial.print(earth_pitch, 2);  Serial.print(F("//"));
+    // ======================= 자이로 바이어스 측정 =======================
+if (Serial.available() > 0) {
+    String input = Serial.readStringUntil('\n');
+    input.trim();
+    if (input == "cal") {  // 시리얼 모니터에 "cal" 입력
+        Serial.println("자이로 바이어스측정");
+        gyro_calibrating = true;
+        gyro_sample_count = 0;
+        gx_sum = 0.0f; gy_sum = 0.0f; gz_sum = 0.0f;
+    }
+}
+
+if (gyro_calibrating) {
+    float gx_raw = GYR_X_DPS();
+    float gy_raw = GYR_Y_DPS();
+    float gz_raw = GYR_Z_DPS();
+    
+    gx_sum += gx_raw;
+    gy_sum += gy_raw;
+    gz_sum += gz_raw;
+    
+    gyro_sample_count++;
+    
+    if (gyro_sample_count >= GYRO_CAL_SAMPLES) {
+        gx_bias = gx_sum / GYRO_CAL_SAMPLES;
+        gy_bias = gy_sum / GYRO_CAL_SAMPLES;
+        gz_bias = gz_sum / GYRO_CAL_SAMPLES;
+        
+        Serial.println("=== 자이로 캘리브레이션 완료 ===");
+        Serial.print("GX Bias: "); Serial.println(gx_bias, 4);
+        Serial.print("GY Bias: "); Serial.println(gy_bias, 4);
+        Serial.print("GZ Bias: "); Serial.println(gz_bias, 4);
+        Serial.println("이제 이 값을 사용해 자이로 데이터를 보정하세요!");
+        
+        gyro_calibrating = false;
+    }
+    return;  // 캘리브레이션 중에는 일반 IMU 처리 스킵
+}
+
+
+
+
+    // flightData에 저장
+    flightData.roll  = earth_roll;
+    flightData.pitch = earth_pitch;
+    flightData.yaw   = earth_yaw;
+
+/*
     icm_20948_DMP_data_t data;
     myICM.readDMPdataFromFIFO(&data);
 
-    if ((myICM.status == ICM_20948_Stat_Ok) || (myICM.status == ICM_20948_Stat_FIFOMoreDataAvail))
+    /* if ((myICM.status == ICM_20948_Stat_Ok) || (myICM.status == ICM_20948_Stat_FIFOMoreDataAvail))
     {
         // --------------------------------------------------
         // 1. 6축 데이터 (Game Rotation Vector)
@@ -228,7 +287,7 @@ void processIMU()
     {
         delay(10);
     }
-
+*/
     flightData.imu = imuData;
 
 
@@ -236,10 +295,12 @@ void processIMU()
     if (nowMs - lastPrint >= PRINT_PERIOD_MS) {
         lastPrint = nowMs;
 
-        Serial.print(flightData.roll, 2); Serial.print(F("//"));
-        Serial.print(flightData.pitch, 2);  Serial.print(F("//"));
-        Serial.print(flightData.yaw, 2); Serial.print(F("//"));-
-        Serial.println(flightData.filterRoll,2); 
+       // Serial.print(flightData.roll, 2); Serial.print(F("//"));
+       // Serial.print(flightData.pitch, 2);  Serial.print(F("//"));
+       // Serial.print(flightData.yaw, 2); Serial.print(F("//"));
+       // Serial.println(flightData.filterRoll,2); 
         //Serial.println(wGyro);
     }
+    
+
 }
