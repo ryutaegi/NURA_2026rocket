@@ -7,9 +7,9 @@
 //낙하산 코드 시작
 
 // //서보모터 각도 제어-> 나중에 각도 조절하기
-const uint8_t DEPLOY_ARM_ANGLE = 10;    // 대기
-const uint8_t DEPLOY_PUNCH_ANGLE = 95;  // 사출
-const uint8_t DEPLOY_LOCK_ANGLE = 95;   // 유지
+const uint8_t DEPLOY_ARM_ANGLE = 180;    // 대기 10 180
+const uint8_t DEPLOY_PUNCH_ANGLE = 10;  // 사출 95 10
+const uint8_t DEPLOY_LOCK_ANGLE = 10;   // 유지 95 10
 
 
 //imu고장 판단
