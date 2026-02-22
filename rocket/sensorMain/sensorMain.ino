@@ -65,7 +65,7 @@ unsigned long launchTimeMs = 0;  // T0 (발사 시작 시각)
 // 표준대기 근사식: p0를 발사대 압력으로 잡으면 상대고도
 static float altitudeFromPressure(float p_hPa, float p0_hPa) {
   if (p_hPa <= 0.0f || p0_hPa <= 0.0f) return 0.0f;          // 0이하값은 0으로
-  return 44330.0f * (1.0f - powf(p_hPa / p0_hPa, 0.1903f));  // 표준대기근사식으로 고도계산
+  return 43561.54f * (1.0f - powf(p_hPa / p0_hPa, 0.1903f));  // 표준대기근사식으로 고도계산
 }
 
 bool initBaro() {
