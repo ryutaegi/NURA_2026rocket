@@ -48,7 +48,7 @@ bool isAltitudeUp(const BaroData& baro) {
       }
     else{
       if(countU > 0) //하락중이면 count가 0이상일 때만 count 1 감소
-      countU-=2;
+      countU-=1;
     }
     prevU = flight.baro.climbRate;
     }
@@ -67,7 +67,7 @@ bool isAltitudeDown(const BaroData& baro) {
       countD++;
     else{
       if(countD > 0) //하락중이면 count가 0이상일 때만 count 1 감소
-      countD-=2;
+      countD-=1;
     }
     prevD = flight.baro.climbRate;
     }

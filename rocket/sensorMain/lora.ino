@@ -15,20 +15,38 @@ static const uint32_t LORA_PERIOD_MS = 500;     //  송신 hz
 static const char b64_tbl[] =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-String base64Encode(const uint8_t* data, int len) {
-  String out;
-  out.reserve(((len + 2) / 3) * 4);
+// String base64Encode(const uint8_t* data, int len) {
+//   String out;
+//   out.reserve(((len + 2) / 3) * 4);
+//   for (int i = 0; i < len; i += 3) {
+//     uint32_t n = ((uint32_t)data[i] << 16);
+//     if (i + 1 < len) n |= ((uint32_t)data[i + 1] << 8);
+//     if (i + 2 < len) n |= data[i + 2];
+
+//     out += b64_tbl[(n >> 18) & 0x3F];
+//     out += b64_tbl[(n >> 12) & 0x3F];
+//     out += (i + 1 < len) ? b64_tbl[(n >> 6) & 0x3F] : '=';
+//     out += (i + 2 < len) ? b64_tbl[n & 0x3F] : '=';
+//   }
+//   return out;
+// }
+
+int base64Encode(const uint8_t* data, int len, char* out) {
+  int outIdx = 0;
+
   for (int i = 0; i < len; i += 3) {
     uint32_t n = ((uint32_t)data[i] << 16);
     if (i + 1 < len) n |= ((uint32_t)data[i + 1] << 8);
     if (i + 2 < len) n |= data[i + 2];
 
-    out += b64_tbl[(n >> 18) & 0x3F];
-    out += b64_tbl[(n >> 12) & 0x3F];
-    out += (i + 1 < len) ? b64_tbl[(n >> 6) & 0x3F] : '=';
-    out += (i + 2 < len) ? b64_tbl[n & 0x3F] : '=';
+    out[outIdx++] = b64_tbl[(n >> 18) & 0x3F];
+    out[outIdx++] = b64_tbl[(n >> 12) & 0x3F];
+    out[outIdx++] = (i + 1 < len) ? b64_tbl[(n >> 6) & 0x3F] : '=';
+    out[outIdx++] = (i + 2 < len) ? b64_tbl[n & 0x3F] : '=';
   }
-  return out;
+
+  out[outIdx] = '\0';
+  return outIdx;
 }
 
 // ======================= packing utils (코드 스타일 유지: Big-endian) =======================
@@ -104,18 +122,32 @@ void sendLoraFromFlight(const FlightData& f, bool parachuteDeployed, uint8_t con
   buf[idx++] = packPhaseChute((uint8_t)f.state, parachuteDeployed);
 
   // base64
-  String payload = base64Encode(buf, idx);
+  //String payload = base64Encode(buf, idx);
 
   // RYLR998: AT+SEND=<addr>,<len>,<data>\r\n
   //LORA_PORT.print("AT+SEND=1,1,1");
-  LORA_PORT.print("AT+SEND=");
-  LORA_PORT.print(LORA_ADDR);
-  LORA_PORT.print(",");
-  LORA_PORT.print(payload.length());
-  LORA_PORT.print(",");
-  LORA_PORT.print(payload);
-  LORA_PORT.print("\r\n");
+
+  // LORA_PORT.print("AT+SEND=");
+  // LORA_PORT.print(LORA_ADDR);
+  // LORA_PORT.print(",");
+  // LORA_PORT.print(payload.length());
+  // LORA_PORT.print(",");
+  // LORA_PORT.print(payload);
+  // LORA_PORT.print("\r\n");
+
  // Serial.println("send");
+
+ char payload[64];
+int payloadLen = base64Encode(buf, idx, payload);
+
+char cmd[96];
+int cmdLen = snprintf(cmd, sizeof(cmd),
+                      "AT+SEND=%d,%d,%s\r\n",
+                      LORA_ADDR,
+                      payloadLen,
+                      payload);
+
+LORA_PORT.write((uint8_t*)cmd, cmdLen);
 }
 
 // Serial2(=LORA_PORT)에서 한 줄씩 받아서 +RCV 파싱
