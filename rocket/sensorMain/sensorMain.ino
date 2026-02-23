@@ -758,8 +758,6 @@ void loop() {
       sdLogFlush();
     }
 
-  //   // while (Serial1.available())
-  //   //   gps.encode(Serial1.read());
   
 
     if (nowMs - lastDebugPrint >= 1000) {
