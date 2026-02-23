@@ -52,14 +52,10 @@ static uint32_t g_baro_lastMs = 0;          // 마지막으로 updateBaro()가 �
 static float g_p0_hPa = 1013.25f;  // 기준 압력 p0
 
 // climbRate 계산
-static float g_alt_filt = 0.0f;
-static float g_alt_prev_filt = 0.0f;
-static bool  g_alt_inited = false;
 static float g_alt_prev = 0.0f;         // 직전고도값
 static uint32_t g_alt_prevMs = 0;       // 직전고도측정했던시간
 static float g_climb_filt = 0.0f;       // LPFT쓴 필터 상태값
-static const float ALT_ALPHA = 0.1f;  // LPF 알파값(상승률)
-static const float CLIMB_ALPHA = 0.2f;  // LPF 알파값(상승률)
+static const float CLIMB_ALPHA = 0.2f;  // LPF 알파값
 
 static bool isValidPressure_hPa(float p) {
   return (p >= 300.0f && p <= 1100.0f);
@@ -89,7 +85,7 @@ bool initBaro() {
   bmp.setSampling(  // BMP280 내부 설정값
     Adafruit_BMP280::MODE_NORMAL,
     Adafruit_BMP280::SAMPLING_X2,
-    Adafruit_BMP280::SAMPLING_X8,
+    Adafruit_BMP280::SAMPLING_X16,
     Adafruit_BMP280::FILTER_X16,
     Adafruit_BMP280::STANDBY_MS_63);
   return true;
@@ -110,10 +106,6 @@ void calibrateBaroP0(uint32_t calibMs = 3000) {
     delay(20);
   }
   if (n > 10) g_p0_hPa = (float)(sum / (double)n);
-
-  g_alt_inited = false;
-  g_alt_prevMs = 0;
-  g_climb_filt = 0.0f;
 }
 
 void updateBaro(FlightData& f, uint32_t nowMs) {
@@ -125,36 +117,24 @@ void updateBaro(FlightData& f, uint32_t nowMs) {
   float press_hPa = bmp.readPressure() / 100.0f;
   if (!isValidPressure_hPa(press_hPa)) return;  // 이상치 스킵
 
-  float alt_raw = altitudeFromPressure(press_hPa, g_p0_hPa);  // 고도계산
+  float alt_m = altitudeFromPressure(press_hPa, g_p0_hPa);  // 고도계산
 
-
-  // 2) 고도 LPF 적용
-  if (!g_alt_inited) {
-    g_alt_filt = alt_raw;
-    g_alt_prev_filt = alt_raw;
-    g_alt_inited = true;
-  } else {
-    g_alt_filt = (1.0f - ALT_ALPHA) * g_alt_filt + ALT_ALPHA * alt_raw;
-  }
-
-  // 3) 상승률 계산 (미분은 필터된 고도로)
+  // 상승률 계산 + 1차 LPF
   float climb = f.baro.climbRate;
   if (g_alt_prevMs != 0) {
-    float dt = (nowMs - g_alt_prevMs) / 1000.0f;
-    if (dt > 0.005f) {
-      float raw = (g_alt_filt - g_alt_prev_filt) / dt;  // alt_filt로 미분
-      g_climb_filt = (1.0f - CLIMB_ALPHA) * g_climb_filt + CLIMB_ALPHA * raw;
+    float dt = (nowMs - g_alt_prevMs) / 1000.0f;                               // s로 변환
+    if (dt > 0.005f) {                                                         // 최소 dt값(5ms)
+      float raw = (alt_m - g_alt_prev) / dt;                                   // 상승률
+      g_climb_filt = (1.0f - CLIMB_ALPHA) * g_climb_filt + CLIMB_ALPHA * raw;  // LPF적용
       climb = g_climb_filt;
     }
   }
-
-  g_alt_prev_filt = g_alt_filt;
-  g_alt_prevMs = nowMs;
-
+  g_alt_prev = alt_m;    // 현재고도 저장
+  g_alt_prevMs = nowMs;  // 현재시간 저장
                          // 구조체에 저장
   f.baro.temperature = tempC;
   f.baro.pressure = press_hPa;
-  f.baro.altitude = g_alt_filt;
+  f.baro.altitude = alt_m;
   f.baro.climbRate = climb;
   f.baroTimeMs = nowMs;
 }
@@ -778,8 +758,6 @@ void loop() {
       sdLogFlush();
     }
 
-  //   // while (Serial1.available())
-  //   //   gps.encode(Serial1.read());
   
 
     if (nowMs - lastDebugPrint >= 1000) {

@@ -29,13 +29,13 @@ bool isConnectOrDeteached(int connectPin)  //분리되면 참으로 판단
 
 bool isAccelOver(const ImuData& imu) {  //제곱값 비교로 바꿈
   const float G = 9.81;
-  const float THRESHOLD_SQ = (1.2 * G) * (1.2 * G);  //임계값은 적절하게 조정하기
+  const float THRESHOLD_SQ = (1.1 * G) * (1.1 * G);  //임계값은 적절하게 조정하기
   float magSq = imu.ax * imu.ax + imu.ay * imu.ay + imu.az * imu.az;
   return magSq >= THRESHOLD_SQ;
 }
 
 bool isAltitudeUp(const BaroData& baro) {
-  static int countU = 0;
+  //static int countU = 0;
   static float prevU = 0;
 
   if(fabs(prevU - baro.climbRate) > 0.05f && launchTimeStarted) {
@@ -43,16 +43,16 @@ bool isAltitudeUp(const BaroData& baro) {
     // Serial.print(" ");
     // Serial.println(prevU);
     if(flight.baro.climbRate > 0.2) //상승 시 카운트 +1
-      {countU++;
+      {jc.countU++;
       //Serial.println(countU);
       }
     else{
-      if(countU > 0) //하락중이면 count가 0이상일 때만 count 1 감소
-      countU-=2;
+      if(jc.countU > 0) //하락중이면 count가 0이상일 때만 count 1 감소
+      jc.countU-=1;
     }
     prevU = flight.baro.climbRate;
     }
-  if(countU > 20)
+  if(jc.countU > 50)
   return true;
   else
   return false;
@@ -80,18 +80,18 @@ bool isAltitudeUp(const BaroData& baro) {
 
 bool isAltitudeDown(const BaroData& baro) {
   static float prevD = 0.0f;
-  static int countD = 0;
+  //static int countD = 0;
 
   if(fabs(prevD - baro.climbRate) > 0.05f && launchTimeStarted) {
     if(flight.baro.climbRate < 0.2) //하강 시 카운트 +1
-      countD++;
+      jc.countD++;
     else{
-      if(countD > 0) //하락중이면 count가 0이상일 때만 count 1 감소
-      countD-=2;
+      if(jc.countD > 0) //하락중이면 count가 0이상일 때만 count 1 감소
+      jc.countD-=1;
     }
     prevD = flight.baro.climbRate;
     }
-  if(countD > 20)
+  if(jc.countD > 50)
   return true;
   else
   return false;
@@ -196,6 +196,7 @@ void updateFlightState(FlightData& flight, bool startFlight, bool powered, bool 
 
         // 🔴 이제부터 APOGEE만 의미 있음
         jc.apogee = 0;
+        jc.countU = 0;
 
         Serial.println("POWERED → COASTING");
       }
@@ -208,6 +209,7 @@ void updateFlightState(FlightData& flight, bool startFlight, bool powered, bool 
 
         // 🔴 DESCENT는 APOGEE 이후부터 카운트
         jc.descent = 0;
+        jc.countD = 0;
 
         Serial.println("COASTING → APOGEE");
       }
