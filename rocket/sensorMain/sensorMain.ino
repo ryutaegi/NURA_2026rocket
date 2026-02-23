@@ -5,10 +5,12 @@
 #include <SPI.h>
 #include <SD.h>
 #include <EEPROM.h>
+#include <avr/wdt.h>
 
 #include "lora.h"
 #include "parachute.h"
 #include "flightType.h"
+
 
 
 #define PIN_CONNECT_DETECT 2
@@ -16,8 +18,8 @@
 
 static const int SD_CS_PIN = 10;
 const int EEPROM_ADDR_IDX = 0;          // EEPROM에 uint16_t 인덱스 저장 주소
-const uint32_t LOG_PERIOD_MS = 50;      // 20Hz
-const uint32_t FLUSH_PERIOD_MS = 1000;  // 1초
+const uint32_t LOG_PERIOD_MS = 100;      // 20Hz
+const uint32_t FLUSH_PERIOD_MS = 10000;  // 1초
 File logFile;
 
 JudgeCounters jc;
@@ -29,6 +31,7 @@ DeployController deployCtl;
 //커넥트핀 연결을 단 한번만 판단하게함
 bool pinDetached = false;
 bool g_parachuteDeployed = false;  //낙하산 사출 여부
+bool isReset = false;  //리셋 전송
 
 // 낙하산 사출 여부 핀 보드로의 송신을 위한 변수 선언
 static bool lastParachute = false; 
@@ -58,6 +61,13 @@ static bool isValidPressure_hPa(float p) {
   return (p >= 300.0f && p <= 1100.0f);
 }  // 기압 범위가 300~1100인지 확인
 
+
+
+void softwareReset() {
+  wdt_enable(WDTO_15MS);  // 15ms 후 리셋
+  while (1) {}            // 대기 → WDT 트리거
+}
+
 // ====================⏱️ 발사 시간 측정 변수 ========================
 bool launchTimeStarted = false;  // 시간 시작 여부
 unsigned long launchTimeMs = 0;  // T0 (발사 시작 시각)
@@ -65,7 +75,7 @@ unsigned long launchTimeMs = 0;  // T0 (발사 시작 시각)
 // 표준대기 근사식: p0를 발사대 압력으로 잡으면 상대고도
 static float altitudeFromPressure(float p_hPa, float p0_hPa) {
   if (p_hPa <= 0.0f || p0_hPa <= 0.0f) return 0.0f;          // 0이하값은 0으로
-  return 44330.0f * (1.0f - powf(p_hPa / p0_hPa, 0.1903f));  // 표준대기근사식으로 고도계산
+  return 43561.54f * (1.0f - powf(p_hPa / p0_hPa, 0.1903f));  // 표준대기근사식으로 고도계산
 }
 
 bool initBaro() {
@@ -133,7 +143,7 @@ void updateBaro(FlightData& f, uint32_t nowMs) {
 // ============================================================================
 TinyGPSPlus gps;
 
-static const uint32_t GPS_PERIOD_MS = 200;  // 구조체 업데이트 주기(5Hz)
+static const uint32_t GPS_PERIOD_MS = 500;  // 구조체 업데이트 주기(5Hz)
 static uint32_t g_gps_lastMs = 0;           // 마지막 구조체 반영 시각
 static uint32_t g_lastGpsUpdateMs = 0;      // 위/경도 실제 갱신 시각
 // 위/경도 정수변환
@@ -144,9 +154,25 @@ static int32_t toE7(double deg) {
   v = (v >= 0.0) ? (v + 0.5) : (v - 0.5);  // 반올림
   return (int32_t)v;
 }
+uint8_t setNav[] = {
+  0xB5,0x62,0x06,0x24,0x24,0x00,
+  0xFF,0xFF,0x06,0x03, // Airborne <1g
+  0x00,0x00,0x00,0x00,
+  0x10,0x27,0x00,0x00,
+  0x05,0x00,
+  0xFA,0x00,
+  0xFA,0x00,
+  0x64,0x00,
+  0x2C,0x01,
+  0x00,0x00,0x00,0x00,
+  0x00,0x00,0x00,0x00,
+  0x16,0xDC
+};
 
 void initGps() {
   Serial1.begin(9600);
+   delay(1000);
+  Serial1.write(setNav, sizeof(setNav));
 }
 
 // loop에서 가능한 자주 파서에 먹이기
@@ -154,28 +180,62 @@ void pollGpsParser() {
   while (Serial1.available()) gps.encode(Serial1.read());  // 수신버퍼에서 1바이트 꺼내서 파서에 먹임
 }
 
-void updateGps(FlightData& f, uint32_t nowMs) {
-  pollGpsParser();                                   // 계속 파싱해서 구조체 비우기
-  if (nowMs - g_gps_lastMs < GPS_PERIOD_MS) return;  // 주기유지(200ms)
-  g_gps_lastMs = nowMs;                              // 타임스탬프 갱신
+// void updateGps(FlightData& f, uint32_t nowMs) {
+//   //pollGpsParser();  
+//                                    // 계속 파싱해서 구조체 비우기
+//   //if (nowMs - g_gps_lastMs < GPS_PERIOD_MS) return;  // 주기유지(200ms)
+//   g_gps_lastMs = nowMs;                              // 타임스탬프 갱신
 
-  // fix판단
+//   // // HDOP
+//   //   Serial.print("HDOP: ");
+//   //   if (gps.hdop.isValid())
+//   //     Serial.println(gps.hdop.hdop());
+//   //   else
+//   //     Serial.println("N/A");
+
+//   // fix판단
+//   bool hasLoc = gps.location.isValid();
+//   bool hasFix = hasLoc && (gps.location.age() < 2000);  // 마지막 위치 업데이트 경과시간 2초이내면 fix
+//   f.gps.fix = hasFix;
+//   // 위성 수 판단
+//   f.gps.sats = gps.satellites.isValid() ? (uint8_t)gps.satellites.value() : 0;
+//   //Serial.println(gps.location.isValid());
+//   if (hasLoc) {
+//     f.gps.latitudeE7 = toE7(gps.location.lat());
+//     f.gps.longitudeE7 = toE7(gps.location.lng());
+
+//     if (gps.location.isUpdated()) flight.gpsTimeMs = nowMs;
+//   }
+
+//   if (gps.altitude.isValid()) f.gps.altitude = gps.altitude.meters();  // m
+//   if (gps.speed.isValid()) f.gps.speed = gps.speed.mps();              // m/s
+//   if (gps.course.isValid()) f.gps.heading = gps.course.deg();          // deg
+// }
+void updateGps(FlightData& f, uint32_t nowMs) {
+
   bool hasLoc = gps.location.isValid();
-  bool hasFix = hasLoc && (gps.location.age() < 2000);  // 마지막 위치 업데이트 경과시간 2초이내면 fix
+  bool hasFix = hasLoc && (gps.location.age() < 2000);
+
   f.gps.fix = hasFix;
-  // 위성 수 판단
-  f.gps.sats = gps.satellites.isValid() ? (uint8_t)gps.satellites.value() : 0;
-  //Serial.println(gps.location.isValid());
+
+  f.gps.sats = gps.satellites.isValid() ? 
+               (uint8_t)gps.satellites.value() : 0;
+
   if (hasLoc) {
     f.gps.latitudeE7 = toE7(gps.location.lat());
     f.gps.longitudeE7 = toE7(gps.location.lng());
-
-    if (gps.location.isUpdated()) flight.gpsTimeMs = nowMs;
   }
 
-  if (gps.altitude.isValid()) f.gps.altitude = gps.altitude.meters();  // m
-  if (gps.speed.isValid()) f.gps.speed = gps.speed.mps();              // m/s
-  if (gps.course.isValid()) f.gps.heading = gps.course.deg();          // deg
+  if (gps.altitude.isValid())
+    f.gps.altitude = gps.altitude.meters();
+
+  if (gps.speed.isValid())
+    f.gps.speed = gps.speed.mps();
+
+  if (gps.course.isValid())
+    f.gps.heading = gps.course.deg();
+
+  f.gpsTimeMs = nowMs;
 }
 
 // ============================================================================
@@ -353,7 +413,7 @@ static inline void wr_u32_le(uint8_t* p, uint32_t v) {
 //  [0] deployed(1: true / 0: false)
 //  [1] reserved
 //  [2..5] timeMs (uint32_t)  // B보드 기준 타임스탬프
-void sendBtoA_ParachuteStatus(Stream& link, bool deployed, uint32_t nowMs) {
+void sendBtoA_Reset(Stream& link, bool deployed, uint32_t nowMs) {
   uint8_t hdr[5];                 // VER(1) MSG(1) LEN(1) reserved(2) = 5
   uint8_t payload[B2A_LEN];
   uint8_t crcBuf[5 + B2A_LEN];
@@ -500,10 +560,6 @@ void setup() {
     Serial.println(g_p0_hPa, 2);
   }
 
-  //낙하산  
-
-  pinMode(PIN_CONNECT_DETECT, INPUT_PULLUP);  //낙하산 커넥트핀 상태 설정
-
   // sd
   if (!SD.begin(SD_CS_PIN)) {
     Serial.println("SD init failed!");
@@ -530,25 +586,27 @@ void setup() {
 void loop() {
   uint32_t nowMs = millis();
   flight.timeMs = nowMs;
+  while (Serial1.available())
+      gps.encode(Serial1.read());
 
   handleLoraRxCommand();  // 지상국 명령 수신
-  // if(Serial2.available())
-  //   Serial.println("asdfasdf");
+  // // if(Serial2.available())
+  // //   Serial.println("asdfasdf");
 
-  // 1) A2B 패킷은 가능한 자주 파싱
-  parseAtoB(Serial3, flight, nowMs);
+  // // 1) A2B 패킷은 가능한 자주 파싱
+ parseAtoB(Serial3, flight, nowMs);
 
-  // 2) 센서 갱신
-  updateBaro(flight, nowMs);
-  updateGps(flight, nowMs);
-  //Serial2.print("AT+SEND=1,1,1");
+  // // 2) 센서 갱신
+   updateBaro(flight, nowMs);
+   updateGps(flight, nowMs);
+  // //Serial2.print("AT+SEND=1,1,1");
 
-  // if(Serial2.available())
-  // Serial.write(Serial2.read());
-  // if(Serial.available())
-  // Serial2.write(Serial.read());
+  // // if(Serial2.available())
+  // // Serial.write(Serial2.read());
+  // // if(Serial.available())
+  // // Serial2.write(Serial.read());
 
-  sendLoraFromFlight(flight, g_parachuteDeployed, pinDetached);
+   sendLoraFromFlight(flight, g_parachuteDeployed, pinDetached);
 
   if (!pinDetached) {
     pinDetached = isConnectOrDeteached(PIN_CONNECT_DETECT);
@@ -562,7 +620,7 @@ void loop() {
       && ((flight.imu.ax) * (flight.imu.ax) +
          (flight.imu.ay) * (flight.imu.ay) + 
          (flight.imu.az) * (flight.imu.az) >  
-         (9.8 * 1.2) * (9.8 * 1.2))) { //이거 나중에 수정해야 함
+         (9.8 * 2) * (9.8 * 2))) { //이거 나중에 수정해야 함
     launchTimeStarted = true;
     launchTimeMs = millis();  // T0
     Serial.println("발사 시간 측정!");
@@ -644,40 +702,48 @@ void loop() {
 
   }
 
-  // ========================
-  // B -> A : parachute 상태 전송 (변화 시 버스트)
-  // ========================
-  if (!lastParachute && g_parachuteDeployed) {
-    // false -> true 변화를 감지
-    b2aBurst = true;
-    b2aBurstStartMs = nowMs;
-    b2aLastSendMs = 0; // 즉시 한 번 보내기 위해 리셋
+  // // ========================
+  // // B -> A : parachute 상태 전송 (변화 시 버스트)
+  // // ========================
+  // // if (!lastParachute && g_parachuteDeployed) {
+  // //   // false -> true 변화를 감지
+  // //   b2aBurst = true;
+  // //   b2aBurstStartMs = nowMs;
+  // //   b2aLastSendMs = 0; // 즉시 한 번 보내기 위해 리셋
+  // // }
+
+  // // lastParachute = g_parachuteDeployed;
+
+  // // // 버스트 재전송: 0.5초 동안 10Hz로만
+  // // if (b2aBurst) {
+  // //   if (b2aLastSendMs == 0 || (nowMs - b2aLastSendMs) >= 100) { // 100ms = 10Hz
+  // //     b2aLastSendMs = nowMs;
+  // //     sendBtoA_ParachuteStatus(Serial3, true, millis());
+  // //   }
+  // //   if (nowMs - b2aBurstStartMs >= 500) { // 0.5초 후 종료 (대략 5회)
+  // //     b2aBurst = false;
+  // //   }
+  // // }
+  if(isReset) {
+    sendBtoA_Reset(Serial3, true, millis());
+    isReset=false;
+    delay(500);
+    softwareReset();
   }
 
-  lastParachute = g_parachuteDeployed;
+  // // ========= 낙하산 서보 FSM 실행 ========================
 
-  // 버스트 재전송: 0.5초 동안 10Hz로만
-  if (b2aBurst) {
-    if (b2aLastSendMs == 0 || (nowMs - b2aLastSendMs) >= 100) { // 100ms = 10Hz
-      b2aLastSendMs = nowMs;
-      sendBtoA_ParachuteStatus(Serial3, true, millis());
-    }
-    if (nowMs - b2aBurstStartMs >= 500) { // 0.5초 후 종료 (대략 5회)
-      b2aBurst = false;
-    }
-  }
+   applyParachuteDeployState();
 
-  // ========= 낙하산 서보 FSM 실행 ========================
+  static uint32_t lastLog = 0;
+  static uint32_t lastFlush = 0;
+  static uint32_t lastDebugPrint = 0;
 
-  applyParachuteDeployState();
+  
 
-  static uint32_t lastPrint = 0;
-  if (nowMs - lastPrint >= 200) {
-    lastPrint = nowMs;
-
-    // sd
+  //   //sd
     static uint32_t lastLogMs = 0;
-    static uint32_t lastLog = 0;
+
     if (nowMs - lastLog >= LOG_PERIOD_MS) {
       lastLog = nowMs;
 
@@ -686,15 +752,18 @@ void loop() {
     }
 
     // 1초마다 flush
-    static uint32_t lastFlush = 0;
+
     if (nowMs - lastFlush >= FLUSH_PERIOD_MS) {
       lastFlush = nowMs;
       sdLogFlush();
     }
 
-    static uint32_t lastPrint = 0;
-    if (nowMs - lastPrint >= 500) {
-      lastPrint = nowMs;
+  //   // while (Serial1.available())
+  //   //   gps.encode(Serial1.read());
+  
+
+    if (nowMs - lastDebugPrint >= 1000) {
+      lastDebugPrint = nowMs;
 
       uint32_t ageA = (flight.aRxTimeMs == 0) ? 0xFFFFFFFFUL : (nowMs - flight.aRxTimeMs);
 
@@ -729,6 +798,8 @@ void loop() {
       Serial.print(pinDetached);
       Serial.print(" parachute =");
       Serial.print(g_parachuteDeployed);
+      Serial.print(" | State = ");
+      Serial.println(flight.state);
 
       Serial.print(" | Baro Alt=");
       Serial.print(flight.baro.altitude, 2);
@@ -745,6 +816,101 @@ void loop() {
       Serial.print(flight.gps.longitudeE7);
       Serial.println();
     }
-  }
+
+  //   static unsigned long lastPrint = 0;
+  // if (millis() - lastPrint > 1000) {   // 1초마다 출력
+  //   lastPrint = millis();
+
+  //   Serial.println("---------------");
+
+  //   // Fix 상태
+  //   Serial.print("Fix: ");
+  //   if (gps.location.isValid()) {
+  //     Serial.println("YES");
+  //   } else {
+  //     Serial.println("NO");
+  //   }
+
+  //   // 위도
+  //   Serial.print("Latitude: ");
+  //   if (gps.location.isValid())
+  //     Serial.println(gps.location.lat(), 6);
+  //   else
+  //     Serial.println("N/A");
+
+  //   // 경도
+  //   Serial.print("Longitude: ");
+  //   if (gps.location.isValid())
+  //     Serial.println(gps.location.lng(), 6);
+  //   else
+  //     Serial.println("N/A");
+
+  //   // 고도
+  //   Serial.print("Altitude (m): ");
+  //   if (gps.altitude.isValid())
+  //     Serial.println(gps.altitude.meters());
+  //   else
+  //     Serial.println("N/A");
+
+  //   // 속도
+  //   Serial.print("Speed (km/h): ");
+  //   if (gps.speed.isValid())
+  //     Serial.println(gps.speed.kmph());
+  //   else
+  //     Serial.println("N/A");
+
+  //   // 위성 수
+  //   Serial.print("Satellites: ");
+  //   if (gps.satellites.isValid())
+  //     Serial.println(gps.satellites.value());
+  //   else
+  //     Serial.println("N/A");
+
+  //   // HDOP
+  //   Serial.print("HDOP: ");
+  //   if (gps.hdop.isValid())
+  //     Serial.println(gps.hdop.hdop());
+  //   else
+  //     Serial.println("N/A");
+
+  //   // 날짜
+  //   Serial.print("Date: ");
+  //   if (gps.date.isValid()) {
+  //     Serial.print(gps.date.year());
+  //     Serial.print("/");
+  //     Serial.print(gps.date.month());
+  //     Serial.print("/");
+  //     Serial.println(gps.date.day());
+  //   } else {
+  //     Serial.println("N/A");
+  //   }
+
+  //   // 시간
+  //   Serial.print("Time (UTC): ");
+  //   if (gps.time.isValid()) {
+  //     Serial.print(gps.time.hour());
+  //     Serial.print(":");
+  //     Serial.print(gps.time.minute());
+  //     Serial.print(":");
+  //     Serial.println(gps.time.second());
+  //   } else {
+  //     Serial.println("N/A");
+  //   }
+
+  //   // 진단 메시지
+  //   if (!gps.location.isValid()) {
+  //     Serial.println(">> Waiting for GPS Fix...");
+  //   }
+
+  //   if (gps.satellites.isValid() && gps.satellites.value() == 0) {
+  //     Serial.println(">> No satellites detected.");
+  //   }
+
+  //   if (gps.hdop.hdop() > 5.0 && gps.hdop.isValid()) {
+  //     Serial.println(">> Poor satellite geometry.");
+  //   }
+
+  //   Serial.println("---------------\n");
+  // }
 }
 

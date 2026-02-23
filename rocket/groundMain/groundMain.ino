@@ -210,9 +210,9 @@ void handleWebCommand() { // 웹으로부터의 명령 처리 함수
     digitalWrite(13, HIGH);
     sendEmergencyDeploy();
   }
-  else if(cmd == "CENTER") {
+  else if(cmd == "RESET") {
     digitalWrite(13, LOW);
-    sendCenter();
+    sendReset();
   }
 }
 
@@ -224,9 +224,9 @@ void sendEmergencyDeploy() { // LoRa 비상 사출 송신 함수
   //Serial.println("[lora] EMERGENCY DEPLOY SENT (\"E\")");
 }
 
-void sendCenter() { // LoRa 중앙 정렬 송신 함수
+void sendReset() { // LoRa 중앙 정렬 송신 함수
   for(int i=0; i<10; i++){
-  lora.print("AT+SEND=1,1,C\r\n");
+  lora.print("AT+SEND=1,1,R\r\n");
   delay(50);
   }
   //Serial.println("[lora] CENTER SENT (\"C\")");

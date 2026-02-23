@@ -38,11 +38,11 @@ bool isAltitudeUp(const BaroData& baro) {
   static int countU = 0;
   static float prevU = 0;
 
-  if(prevU !=  flight.baro.climbRate && launchTimeStarted) {
+  if(fabs(prevU - baro.climbRate) > 0.05f && launchTimeStarted) {
     // Serial.print(flight.baro.climbRate);
     // Serial.print(" ");
     // Serial.println(prevU);
-    if(flight.baro.climbRate > 0) //상승 시 카운트 +1
+    if(flight.baro.climbRate > 0.2) //상승 시 카운트 +1
       {countU++;
       //Serial.println(countU);
       }
@@ -52,18 +52,38 @@ bool isAltitudeUp(const BaroData& baro) {
     }
     prevU = flight.baro.climbRate;
     }
-  if(countU > 10)
+  if(countU > 20)
   return true;
   else
   return false;
 }
 
+// bool isAltitudeUp(const BaroData& baro) {
+//   static int countU = 0;
+
+//   if(!launchTimeStarted) return false;
+
+//     if(flight.baro.climbRate > 0.2) //상승 시 카운트 +1
+//       {
+//         countU++;
+//       }
+//     else{
+//       if(countU > 0) //하락중이면 count가 0이상일 때만 count 1 감소
+//       countU-=2;
+//     }
+    
+//   if(countU > 20)
+//   return true;
+//   else
+//   return false;
+// }
+
 bool isAltitudeDown(const BaroData& baro) {
   static float prevD = 0.0f;
   static int countD = 0;
 
-  if(prevD !=  flight.baro.climbRate && launchTimeStarted) {
-    if(flight.baro.climbRate < 0) //하강 시 카운트 +1
+  if(fabs(prevD - baro.climbRate) > 0.05f && launchTimeStarted) {
+    if(flight.baro.climbRate < 0.2) //하강 시 카운트 +1
       countD++;
     else{
       if(countD > 0) //하락중이면 count가 0이상일 때만 count 1 감소
@@ -92,7 +112,7 @@ bool isPowered(bool accelOver, bool altitudeUp, JudgeCounters& jc)  //카운터 
 
 bool isMotorOver(bool isPoweredNow, JudgeCounters& jc)  //카운터 초기화 추가
 {
-  const uint8_t THRESHOLD = 10;  // 10Hz 기준 ≈ 1초
+  const uint8_t THRESHOLD = 20;  // 10Hz 기준 ≈ 1초
 
   if (!isPoweredNow) {
     if (jc.motorOver < THRESHOLD) jc.motorOver++;
