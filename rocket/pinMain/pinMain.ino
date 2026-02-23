@@ -1,6 +1,8 @@
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
 #include <float.h>
+#include <avr/wdt.h>
+
 #include "pin.h"           // 상보필터/IMU 처리
 #include "servo_driver.h"
 
@@ -129,6 +131,78 @@ void sendAtoB() {
   Serial3.write(buf, idx);
 }
 
+
+void softwareReset() {
+  wdt_enable(WDTO_15MS);  // 15ms 후 리셋
+  while (1) {}            // 대기 → WDT 트리거
+}
+
+// ===== B -> A reset status receiver =====    리셋 유무 받음
+static const uint8_t B2A_SYNC1 = 0xB5;
+static const uint8_t B2A_SYNC2 = 0x5B;
+static const uint8_t B2A_VER   = 1;
+static const uint8_t B2A_MSG   = 0x31;
+static const uint8_t B2A_LEN   = 6;
+
+void pollB2A(Stream& link) {
+  enum { WAIT_S1, WAIT_S2, READ_HDR, READ_PAYLOAD } static st = WAIT_S1;
+
+  static uint8_t hdr[5];
+  static uint8_t payload[B2A_LEN];
+  static uint8_t crcBytes[2];
+  static uint8_t idx = 0;
+
+  while (link.available()) {
+    uint8_t b = link.read();
+
+    switch (st) {
+      case WAIT_S1:
+        if (b == B2A_SYNC1) st = WAIT_S2;
+        break;
+
+      case WAIT_S2:
+        if (b == B2A_SYNC2) {
+          st = READ_HDR;
+          idx = 0;
+        } else st = WAIT_S1;
+        break;
+
+      case READ_HDR:
+        hdr[idx++] = b;
+        if (idx >= 5) {
+          if (hdr[0] != B2A_VER || hdr[1] != B2A_MSG || hdr[2] != B2A_LEN) {
+            st = WAIT_S1;
+            break;
+          }
+          idx = 0;
+          st = READ_PAYLOAD;
+        }
+        break;
+
+      case READ_PAYLOAD:
+        if (idx < B2A_LEN) {
+          payload[idx++] = b;
+        } else if (idx < B2A_LEN + 2) {
+          crcBytes[idx - B2A_LEN] = b;
+          idx++;
+        }
+
+        if (idx >= B2A_LEN + 2) {
+          // ⚠ CRC 생략 버전 (디버깅용)
+          if(payload[0] == 1)
+            softwareReset();
+
+
+          Serial.print("RECV B->A parachute=");
+         
+
+          st = WAIT_S1;
+        }
+        break;
+    }
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   Serial3.begin(115200); 
@@ -180,6 +254,7 @@ float yaw_drift_total = 0.00f;
 }
 
 void loop() {
+  pollB2A(Serial3);
   // ================= IMU 자동 복구 =================
   
   //  데이터 읽기 시도
