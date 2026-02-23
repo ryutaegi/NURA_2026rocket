@@ -27,6 +27,12 @@ float wrap720_deg(float d){
   return d;
 }
 
+float wrap360_deg(float d){
+  while (d < 0.0f) d += 360.0f;
+  while (d >= 720.0f) d -= 360.0f;
+  return d;
+}
+
 float fmap(float x, float in_min, float in_max, float out_min, float out_max) {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
@@ -41,7 +47,7 @@ void sweepOnce()
 
 
   // 스윕 
-  writeServoDeg(MOTOR_CH1, startDeg1);
+  /*writeServoDeg(MOTOR_CH1, startDeg1);
   writeServoDeg(MOTOR_CH2, startDeg2);
   delay(500);
    writeServoDeg(MOTOR_CH1, SERVO_NEUTRAL_DEG1);
@@ -55,6 +61,7 @@ delay(500);
   writeServoDeg(MOTOR_CH1, SERVO_NEUTRAL_DEG1);
   writeServoDeg(MOTOR_CH2, SERVO_NEUTRAL_DEG2);
   delay(500);
+  */
 }
 
 // [추가 기능] IMU 설정 로직을 함수로 분리 (Setup과 Loop에서 재사용하기 위해)

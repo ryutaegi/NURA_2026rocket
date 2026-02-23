@@ -4,8 +4,8 @@
 //-------------------------------------------------------------------------------------------
 
 #define DEFAULT_SAMPLE_FREQ 200.0f // sample frequency in Hz
-#define twoKpDef (2.0f * 1.5f)     // 2 * proportional gain
-#define twoKiDef (2.0f * 0.23f)     // 2 * integral gain
+float twoKpDef = (2.0f * 2.0f);     // 2 * proportional gain
+float twoKiDef = (2.0f * 0.101f);     // 2 * integral gain
 //-------------------------------------------------------------------------------------------
 //업데이트
 
@@ -33,11 +33,9 @@ void Adafruit_Mahony::update(float gx, float gy, float gz, float ax, float ay,
   float halfvx, halfvy, halfvz, halfwx, halfwy, halfwz;
   float halfex, halfey, halfez;
   float qa, qb, qc;
+float twoKpDef =(2.0f * 2.0f);     // 2 * proportional gain
+float twoKiDef =(2.0f * 0.01f);     // 2 * integral gain
 
-  // 단위 변환
-  //gx *= 0.0174533f;
-  //gy *= 0.0174533f;
-  //gz *= 0.0174533f;
 
   // 가속도계 측정값이 유효할때
   if (!((ax == 0.0f) && (ay == 0.0f) && (az == 0.0f))) {
@@ -145,10 +143,7 @@ void Adafruit_Mahony::updateIMU(float gx, float gy, float gz, float ax,
   float halfex, halfey, halfez;
   float qa, qb, qc;
 
-  //gx *= 0.0174533f;
-  //gy *= 0.0174533f;
-  //gz *= 0.0174533f;
-
+ 
 
   if (!((ax == 0.0f) && (ay == 0.0f) && (az == 0.0f))) {
 
@@ -221,23 +216,23 @@ float Adafruit_Mahony::invSqrt(float x) {
 //-------------------------------------------------------------------------------------------
 //오일러각 변환
 void Adafruit_Mahony::computeAngles() {
-    // ICM20948 DMP 형식: q1_raw, q2_raw, q3_raw → q0 계산 + 축 재매핑
-    // 현재 Mahony q0,q1,q2,q3는 이미 정규화된 float 사용
+ 
     
     float qw = q0;  // w
-    float qx = q2;  // x (DMP qx = Mahony q2)
-    float qy = q1;  // y (DMP qy = Mahony q1)  
-    float qz = -q3; // z (DMP qz = -Mahony q3) - 축 반전!
+    float qx = q2;  // x 
+    float qy = q1;  // y 
+    float qz = -q3; // z 
 
-    // Roll (deg)
+    //pitch (deg)
     float t0 = +2.0f * (qw * qx + qy * qz);
     float t1 = +1.0f - 2.0f * (qx * qx + qy * qy);
-    roll = atan2f(t0, t1) * 57.29578f;  // rad → deg
+    pitch =  atan2f(t0, t1) * 57.29578f; 
+    pitch = -pitch; // rad → deg
 
-    // Pitch (deg) 
+    // roll (deg) 
     float t2 = +2.0f * (qw * qy - qx * qz);
     t2 = constrain(t2, -1.0f, 1.0f);
-    pitch = asinf(t2) * 57.29578f;
+    roll = asinf(t2) * 57.29578f;
 
     // Yaw (deg)
     float t3 = +2.0f * (qw * qz + qx * qy);

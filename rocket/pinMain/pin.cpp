@@ -1,16 +1,16 @@
 #include "pin.h"
 #include "Adafruit_AHRS_Mahony.h"
-#include "Adafruit_AHRS_Madgwick.h"
+#include "servo_driver.h"
 
 Adafruit_Mahony mahony6; 
 Adafruit_Mahony mahony9; 
 
 // ======================= 자이로 캘리브레이션 변수 =======================
 static bool gyro_calibrating = false;
-static float gx_bias = 0.5665f, gy_bias = -0.9579f, gz_bias = 0.0773f;
+static float gx_bias = 0.00f, gy_bias = -0.00f, gz_bias = 0.00f;
 static float gx_sum = 0.0f, gy_sum = 0.0f, gz_sum = 0.0f;
 static uint32_t gyro_sample_count = 0;
-const uint32_t GYRO_CAL_SAMPLES = 30000;
+const uint32_t GYRO_CAL_SAMPLES = 10000;
 
 
 // ======================= IMU 설정 =======================
@@ -19,7 +19,8 @@ ICM_20948_I2C myICM;
 // ======================= 사용자 설정 =======================
 const uint32_t PRINT_PERIOD_MS = 50;
 const float LPF_K = 0.20f;
-
+static unsigned long last_correction_time = 0;
+static float yaw_drift_total = 0.0f;
 ImuData imuData = {};
 FlightData flightData = {};
 const float MAG_BIAS_X = 0.0f;
@@ -149,9 +150,9 @@ void processIMU()
     my_f += LPF_K * (my - my_f);
     mz_f += LPF_K * (mz - mz_f);
 
-    imuData.ax = ax_f;  // 저장소는 m/s^2
-    imuData.ay = ay_f;
-    imuData.az = az_f;
+    imuData.ax = ax;  // 저장소는 m/s^2
+    imuData.ay = ay;
+    imuData.az = az;
 
     imuData.gx = rad2deg(gx);  // 라디안을 도(deg)로 변환
     imuData.gy = rad2deg(gy);
@@ -161,8 +162,13 @@ void processIMU()
     mahony6.updateIMU(gx, gy, gz, ax, ay, az, dt);
     mahony6.computeAngles();
  
-    sensor_yaw   = mahony6.yaw   ;
+    sensor_yaw   = mahony6.yaw;
+    sensor_yaw= wrap360_deg(sensor_yaw);
+   if (sensor_yaw > 180.00f){
+         sensor_yaw-= 360.0f;  // -180~180 변환
+   }
     flightData.filterRoll = sensor_yaw ;
+    
     //Serial.print(sensor_yaw);Serial.print("//");
     //Serial.print( flightData.filterRoll);Serial.print("//");
     //Serial.print(earth_roll, 2); Serial.print(F("//"));
@@ -186,7 +192,7 @@ void processIMU()
     // Earth 각도 추출
    
 
- /*
+ 
     
    // Serial.print(earth_roll, 2); Serial.print(F("//"));
     //Serial.print(earth_pitch, 2);  Serial.print(F("//"));
@@ -228,7 +234,7 @@ if (gyro_calibrating) {
     }
     return;  // 캘리브레이션 중에는 일반 IMU 처리 스킵
 }
-*/
+
 
 
 
@@ -288,9 +294,7 @@ if (gyro_calibrating) {
     if (nowMs - lastPrint >= PRINT_PERIOD_MS) {
         lastPrint = nowMs;
 
-       // Serial.print(flightData.roll, 2); Serial.print(F("//"));
-       // Serial.print(flightData.pitch, 2);  Serial.print(F("//"));
-       // Serial.print(flightData.yaw, 2); Serial.print(F("//"));
+
        // Serial.println(flightData.filterRoll,2); 
         //Serial.println(wGyro);
     }

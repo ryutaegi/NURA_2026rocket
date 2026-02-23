@@ -2,11 +2,13 @@
 #include <Adafruit_PWMServoDriver.h>
 #include <float.h>
 #include "pin.h"           // 상보필터/IMU 처리
-#include "PIDController.h" // PID compute
 #include "servo_driver.h"
 
 #define PIN_CONNECT_DETECT 2
 
+
+//누적값
+float yaw_drift_total = 0.00f; 
 // [Spike Filter 변수]
 static int      spikeCounter = 0;
 static const int MAX_SPIKE_COUNT = 4; // n회 이상 튀면 FLT_MAX 처리
@@ -29,21 +31,16 @@ static const float   SERVO_NEUTRAL_DEG1 = 91.7f;  //흰
 static const float   SERVO_NEUTRAL_DEG2 = 83.5f;  //검
 
 // [설정] 서보 물리적 제한 각도
-static const float    MAX_SERVO_LIMIT = 90.0f; 
+static const float    MAX_SERVO_LIMIT = 35.0f; 
 
-// 이전yaw  
+// 이전 yaw  
 static float prev_yaw = 0.0f;
 
 
-// ======================= PID 설정 =======================
-PIDController pid1(1.2f, 0.01f, 0.08f);
-PIDController pid2(1.2f, 0.01f, 0.08f);
-
 // ======================= 타이밍 =======================
-static uint32_t lastPidUs = 0;
 static uint32_t lastDbgMs = 0;
 
-// [추가 기능용 전역 변수]
+//기능고장 대처 
 static uint32_t lastImuDataMs = 0;      // 마지막으로 데이터 들어온 시간
 static uint32_t lastResetAttemptMs = 0; // 마지막 리셋 시도 시간
 static bool     isImuHealthy = false;   // 센서 건강 상태
@@ -175,35 +172,17 @@ void setup() {
       Serial.println(myICM.statusString());
       delay(500);
     }
-  /* bool success = true;
-  success &= (myICM.initializeDMP() == ICM_20948_Stat_Ok);
 
-  success &= (myICM.enableDMPSensor(INV_ICM20948_SENSOR_GAME_ROTATION_VECTOR) == ICM_20948_Stat_Ok);
-  success &= (myICM.enableDMPSensor(INV_ICM20948_SENSOR_ROTATION_VECTOR) == ICM_20948_Stat_Ok);
- 
-  success &= (myICM.setDMPODRrate(DMP_ODR_Reg_Quat6, 0) == ICM_20948_Stat_Ok); // 6축 데이터 속도
-  success &= (myICM.setDMPODRrate(DMP_ODR_Reg_Quat9, 0) == ICM_20948_Stat_Ok); // 9축 데이터 속도
- 
-  success &= (myICM.setDMPODRrate(DMP_ODR_Reg_Cpass, 0) == ICM_20948_Stat_Ok);
   
-  success &= (myICM.enableFIFO() == ICM_20948_Stat_Ok);
-  success &= (myICM.enableDMP() == ICM_20948_Stat_Ok);
-  success &= (myICM.resetDMP() == ICM_20948_Stat_Ok);
-  success &= (myICM.resetFIFO() == ICM_20948_Stat_Ok);
-  }*/
-
-  lastMicros = micros();
-  lastPidUs = micros();
-
-  pid1.reset();
- pid2.reset();
+ 
 }
+float yaw_drift_total = 0.00f; 
 }
 
 void loop() {
-  // ================= IMU 자동 복구 로직 =================
+  // ================= IMU 자동 복구 =================
   
-  // 1. 데이터 읽기 시도
+  //  데이터 읽기 시도
   bool dataAvailable = false;
   if (myICM.dataReady()) {
     myICM.getAGMT();
@@ -212,7 +191,7 @@ void loop() {
     
   }
 
-  // 3. 타임아웃 감지 (선이 뽑힘)
+  // 타임아웃 감지 (선이 뽑힘)
   // 500ms 동안 데이터가 안 들어오면 연결끊김으로 판단
   if (millis() - lastImuDataMs > 500) {
     isImuHealthy = false;
@@ -228,7 +207,7 @@ void loop() {
      }
 
 
-  // 4. 센서가 비정상일 때 복구 시도
+  //  센서가 비정상일 때 복구 시도
   if (!isImuHealthy) {
     // 안전을 위해 서보 중립
     flightData.filterRoll = 0;
@@ -256,16 +235,19 @@ void loop() {
     }
     
   }
-
-  
-      
-  
   
   // 데이터가 있으면 실행, 데이터 유무 상관 없이 센서통신낙하산보드로 전송
   if (dataAvailable) {
 
 
     processIMU();  // 상보필터 업데이트
+    
+   
+     // 누적값 제거 
+     yaw_drift_total = yaw_drift_total - 0.000f;            // ?초당 0.00053° 누적
+    flightData.filterRoll =flightData.filterRoll+ yaw_drift_total;        // 누적값 
+    
+   
 
     bool isSpike = (abs(myICM.accX()) > ACCEL_AXIS_LIMIT) || (abs(myICM.accY()) > ACCEL_AXIS_LIMIT) || (abs(myICM.accZ()) > ACCEL_AXIS_LIMIT);
 
@@ -291,16 +273,12 @@ void loop() {
     static float last_yaw_deg = 0.0f;
 
   
-    // ================= 2. 비행 중 제어 로직 =================
-
-    uint32_t nowUs = micros();
-    float dt = (nowUs - lastPidUs) * 1e-6f;
-    lastPidUs = nowUs;
+    // =================  롤 제어 =================
 
 
-    // yaw를 -180~180 범위로 정규화
-  float yaw_deg = wrap720_deg(flightData.filterRoll);  // 0~360
-  if (yaw_deg > 360.0f) yaw_deg -= 720.0f;  // -180~180 변환
+    // yaw를 -360~360으로
+  float yaw_deg = wrap720_deg(flightData.filterRoll);  // 0~720
+  if (yaw_deg > 360.0f) yaw_deg -= 720.0f;  // -360~360 변환
   
   float diff = yaw_deg - prev_yaw;
   if (diff > 180.0f) yaw_deg -= 360.0f;    // 179° → -179°일 때 -181° → 181°로
@@ -326,7 +304,7 @@ void loop() {
   float servoDeg2 = SERVO_NEUTRAL_DEG2 + servoOffset2;
   
   
-  // 안전 범위 제한 (±10° 고정)
+  // 안전 범위 제한 
   servoDeg1 = constrain(servoDeg1, SERVO_NEUTRAL_DEG1 - MAX_SERVO_LIMIT, SERVO_NEUTRAL_DEG1 + MAX_SERVO_LIMIT);
   servoDeg2 = constrain(servoDeg2, SERVO_NEUTRAL_DEG2 - MAX_SERVO_LIMIT, SERVO_NEUTRAL_DEG2 + MAX_SERVO_LIMIT);
   
@@ -335,14 +313,18 @@ void loop() {
   writeServoDeg(MOTOR_CH1, servoDeg1);
   writeServoDeg(MOTOR_CH2, servoDeg2);
   
-  // 디버그 출력
-  Serial.print("Yaw: "); Serial.print(flightData.filterRoll, 1);
-  Serial.print(" Servo1: "); Serial.print(servoDeg1, 1);
-  Serial.print(" Servo2: "); Serial.println(servoDeg2, 1);
+
+
+  //Serial.print("Yaw: "); 
+ //        Serial.print(imuData.gx, 2); Serial.print(F("//"));
+ //       Serial.print(imuData.gx, 2);  Serial.print(F("//"));
+  //      Serial.print(imuData.gx, 2); Serial.print(F("//"));
+  Serial.println(flightData.filterRoll, 6);
+ // Serial.print(" Servo1: "); Serial.print(servoDeg1, 1);
+ // Serial.print(" Servo2: "); Serial.println(servoDeg2, 1);
 
   }
-
-
+  
   // 센서, 통신, 낙하산보드로 데이터 전송
   flightData.timeMs = millis();
   static uint32_t lastTx = 0;
@@ -352,8 +334,6 @@ void loop() {
     sendAtoB();
   
   }
-  //Serial.print(imuData.gx);  Serial.print("//");
-  //Serial.print(imuData.gy); Serial.print("//");
-  //Serial.println(imuData.gz); Serial.print("//");
+
 
 }
