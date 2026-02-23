@@ -5,6 +5,7 @@
 #include "flightType.h"
 
 extern bool g_parachuteDeployed;
+extern bool reset;
 
 // LoRa 초기화
 void initLora();

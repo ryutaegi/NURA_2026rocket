@@ -31,6 +31,7 @@ static const char b64_tbl[] =
 //   return out;
 // }
 
+
 int base64Encode(const uint8_t* data, int len, char* out) {
   int outIdx = 0;
 
@@ -173,8 +174,9 @@ void handleLoraRxCommand() {
       //emergencyDeploy();
       Serial.println("receive EEE");
     }
-    if (data == "C") {
-Serial.println("receive CCC");
+    if (data == "R") {
+      Serial.println("receive RRR");
+      isReset = true;
     }
   }
 }

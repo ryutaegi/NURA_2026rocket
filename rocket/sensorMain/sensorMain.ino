@@ -5,10 +5,12 @@
 #include <SPI.h>
 #include <SD.h>
 #include <EEPROM.h>
+#include <avr/wdt.h>
 
 #include "lora.h"
 #include "parachute.h"
 #include "flightType.h"
+
 
 
 #define PIN_CONNECT_DETECT 2
@@ -29,6 +31,7 @@ DeployController deployCtl;
 //커넥트핀 연결을 단 한번만 판단하게함
 bool pinDetached = false;
 bool g_parachuteDeployed = false;  //낙하산 사출 여부
+bool isReset = false;  //리셋 전송
 
 // 낙하산 사출 여부 핀 보드로의 송신을 위한 변수 선언
 static bool lastParachute = false; 
@@ -57,6 +60,13 @@ static const float CLIMB_ALPHA = 0.2f;  // LPF 알파값
 static bool isValidPressure_hPa(float p) {
   return (p >= 300.0f && p <= 1100.0f);
 }  // 기압 범위가 300~1100인지 확인
+
+
+
+void softwareReset() {
+  wdt_enable(WDTO_15MS);  // 15ms 후 리셋
+  while (1) {}            // 대기 → WDT 트리거
+}
 
 // ====================⏱️ 발사 시간 측정 변수 ========================
 bool launchTimeStarted = false;  // 시간 시작 여부
@@ -403,7 +413,7 @@ static inline void wr_u32_le(uint8_t* p, uint32_t v) {
 //  [0] deployed(1: true / 0: false)
 //  [1] reserved
 //  [2..5] timeMs (uint32_t)  // B보드 기준 타임스탬프
-void sendBtoA_ParachuteStatus(Stream& link, bool deployed, uint32_t nowMs) {
+void sendBtoA_Reset(Stream& link, bool deployed, uint32_t nowMs) {
   uint8_t hdr[5];                 // VER(1) MSG(1) LEN(1) reserved(2) = 5
   uint8_t payload[B2A_LEN];
   uint8_t crcBuf[5 + B2A_LEN];
@@ -662,7 +672,7 @@ void loop() {
     bool isCount = false;
     unsigned long flightTimeMs = millis() - launchTimeMs;
 
-    if (flightTimeMs >= 10000 && !g_parachuteDeployed) {  // 1,000ms = 10초
+    if (flightTimeMs >= 1000000 && !g_parachuteDeployed) {  // 1,000ms = 10초
       Serial.println("낙하산 사출! - 10초 조건");
       deployCtl.state = DEPLOY_PUNCH;
       g_parachuteDeployed = true;
@@ -714,6 +724,12 @@ void loop() {
   // //     b2aBurst = false;
   // //   }
   // // }
+  if(isReset) {
+    sendBtoA_Reset(Serial3, true, millis());
+    isReset=false;
+    delay(500);
+    softwareReset();
+  }
 
   // // ========= 낙하산 서보 FSM 실행 ========================
 
@@ -782,6 +798,8 @@ void loop() {
       Serial.print(pinDetached);
       Serial.print(" parachute =");
       Serial.print(g_parachuteDeployed);
+      Serial.print(" | State = ");
+      Serial.println(flight.state);
 
       Serial.print(" | Baro Alt=");
       Serial.print(flight.baro.altitude, 2);

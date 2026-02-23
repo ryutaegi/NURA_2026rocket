@@ -418,6 +418,7 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
 
   const handleEmergencyEject = () => {sendMessage({ type: 'emergency_eject' }); playSound("/sounds/ssagal.mp3");}
   const handleCenterAlign = () => sendMessage({ type: 'center_align' });
+  const handleReset = () => {sendMessage({ type: 'reset' });}
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -565,8 +566,18 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
                 </div>
               </div>
 
+              
+
               {/* 기록 시작/중지 및 실시간 송신 */}
               <div className="bg-gray-900/50 backdrop-blur-sm rounded-xl p-4 border border-white/5 space-y-3">
+              <button
+                  onClick={handleReset}
+                  className={`w-full px-4 py-3 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 font-black text-sm shadow-lg bg-red-600 hover:bg-red-500 text-white shadow-red-900/40 `}
+                >
+                  <Square className="h-4 w-4" />
+                  보드 초기화
+                </button>
+                
                 {!isRecording ? (
                   <button
                     onClick={handleStartRecording}

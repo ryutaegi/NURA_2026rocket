@@ -170,7 +170,7 @@ let recordedData = [];
 
 // 시리얼 포트 설정 (아두이노 연결)
 // COM 포트는 환경에 맞게 수정 필요 (예: Windows - 'COM3', macOS/Linux - '/dev/tty.usbserial-XXXX')
-const SERIAL_PORT = '/dev/tty.usbserial-130'; // 실제 포트로 변경하세요
+const SERIAL_PORT = '/dev/tty.usbserial-120'; // 실제 포트로 변경하세요
 const BAUD_RATE = 115200; // 아두이노와 동일하게 설정
 
 let serialPort;
@@ -332,15 +332,15 @@ wss.on('connection', (ws) => {
         }
       }
 
-      if (msg.type === 'center_align') {
+      if (msg.type === 'reset') {
         if (serialPort && serialPort.isOpen) {
-          serialPort.write('CENTER\n', (err) => {
+          serialPort.write('RESET\n', (err) => {
             if (err) {
               console.error('시리얼 쓰기 에러 (CENTER):', err.message);
               return ws.send(JSON.stringify({ type: 'error', message: '명령 전송에 실패했습니다.' }));
             }
-            console.log('[WS] 중앙 정렬 명령 전송됨');
-            ws.send(JSON.stringify({ type: 'command_success', message: '카운트다운이 시작되었습니다.' }));
+            console.log('[WS] 보드 초기화 명령 전송됨');
+            ws.send(JSON.stringify({ type: 'command_success', message: '보드 초기화 명령을 전송했습니다.' }));
           });
         } else {
           ws.send(JSON.stringify({ type: 'error', message: '지상국 수신기가 연결되지 않았습니다.' }));
