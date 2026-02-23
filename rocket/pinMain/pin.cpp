@@ -7,7 +7,7 @@ Adafruit_Mahony mahony9;
 
 // ======================= 자이로 캘리브레이션 변수 =======================
 static bool gyro_calibrating = false;
-static float gx_bias = 0.00f, gy_bias = -0.00f, gz_bias = 0.00f;
+static float gx_bias = 0.5227f, gy_bias = -0.9283f, gz_bias = 0.0500f;
 static float gx_sum = 0.0f, gy_sum = 0.0f, gz_sum = 0.0f;
 static uint32_t gyro_sample_count = 0;
 const uint32_t GYRO_CAL_SAMPLES = 10000;
@@ -18,6 +18,7 @@ ICM_20948_I2C myICM;
 
 // ======================= 사용자 설정 =======================
 const uint32_t PRINT_PERIOD_MS = 50;
+
 const float LPF_K = 0.20f;
 static unsigned long last_correction_time = 0;
 static float yaw_drift_total = 0.0f;
@@ -163,6 +164,9 @@ void processIMU()
     mahony6.computeAngles();
  
     sensor_yaw   = mahony6.yaw;
+     //  // 누적값 제거 
+     yaw_drift_total = yaw_drift_total + 0.00072f;            // ?초당 0.00053° 누적
+    sensor_yaw = sensor_yaw + yaw_drift_total;  
     sensor_yaw= wrap360_deg(sensor_yaw);
    if (sensor_yaw > 180.00f){
          sensor_yaw-= 360.0f;  // -180~180 변환
@@ -195,45 +199,45 @@ void processIMU()
  
     
    // Serial.print(earth_roll, 2); Serial.print(F("//"));
-    //Serial.print(earth_pitch, 2);  Serial.print(F("//"));
-    // ======================= 자이로 바이어스 측정 =======================
-if (Serial.available() > 0) {
-    String input = Serial.readStringUntil('\n');
-    input.trim();
-    if (input == "cal") {  // 시리얼 모니터에 "cal" 입력
-        Serial.println("자이로 바이어스측정");
-        gyro_calibrating = true;
-        gyro_sample_count = 0;
-        gx_sum = 0.0f; gy_sum = 0.0f; gz_sum = 0.0f;
-    }
-}
+//     //Serial.print(earth_pitch, 2);  Serial.print(F("//"));
+//     // ======================= 자이로 바이어스 측정 =======================
+// if (Serial.available() > 0) {
+//     String input = Serial.readStringUntil('\n');
+//     input.trim();
+//     if (input == "cal") {  // 시리얼 모니터에 "cal" 입력
+//         Serial.println("자이로 바이어스측정");
+//         gyro_calibrating = true;
+//         gyro_sample_count = 0;
+//         gx_sum = 0.0f; gy_sum = 0.0f; gz_sum = 0.0f;
+//     }
+// }
 
-if (gyro_calibrating) {
-    float gx_raw = GYR_X_DPS();
-    float gy_raw = GYR_Y_DPS();
-    float gz_raw = GYR_Z_DPS();
+// if (gyro_calibrating) {
+//     float gx_raw = GYR_X_DPS();
+//     float gy_raw = GYR_Y_DPS();
+//     float gz_raw = GYR_Z_DPS();
     
-    gx_sum += gx_raw;
-    gy_sum += gy_raw;
-    gz_sum += gz_raw;
+//     gx_sum += gx_raw;
+//     gy_sum += gy_raw;
+//     gz_sum += gz_raw;
     
-    gyro_sample_count++;
+//     gyro_sample_count++;
     
-    if (gyro_sample_count >= GYRO_CAL_SAMPLES) {
-        gx_bias = gx_sum / GYRO_CAL_SAMPLES;
-        gy_bias = gy_sum / GYRO_CAL_SAMPLES;
-        gz_bias = gz_sum / GYRO_CAL_SAMPLES;
+//     if (gyro_sample_count >= GYRO_CAL_SAMPLES) {
+//         gx_bias = gx_sum / GYRO_CAL_SAMPLES;
+//         gy_bias = gy_sum / GYRO_CAL_SAMPLES;
+//         gz_bias = gz_sum / GYRO_CAL_SAMPLES;
         
-        Serial.println("=== 자이로 캘리브레이션 완료 ===");
-        Serial.print("GX Bias: "); Serial.println(gx_bias, 4);
-        Serial.print("GY Bias: "); Serial.println(gy_bias, 4);
-        Serial.print("GZ Bias: "); Serial.println(gz_bias, 4);
-        Serial.println("이제 이 값을 사용해 자이로 데이터를 보정하세요!");
+//         Serial.println("=== 자이로 캘리브레이션 완료 ===");
+//         Serial.print("GX Bias: "); Serial.println(gx_bias, 4);
+//         Serial.print("GY Bias: "); Serial.println(gy_bias, 4);
+//         Serial.print("GZ Bias: "); Serial.println(gz_bias, 4);
+//         Serial.println("이제 이 값을 사용해 자이로 데이터를 보정하세요!");
         
-        gyro_calibrating = false;
-    }
-    return;  // 캘리브레이션 중에는 일반 IMU 처리 스킵
-}
+//         gyro_calibrating = false;
+//     }
+//     return;  // 캘리브레이션 중에는 일반 IMU 처리 스킵
+// }
 
 
 
