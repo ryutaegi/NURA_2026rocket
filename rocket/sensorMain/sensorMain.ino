@@ -550,10 +550,6 @@ void setup() {
     Serial.println(g_p0_hPa, 2);
   }
 
-  //낙하산  
-
-  pinMode(PIN_CONNECT_DETECT, INPUT_PULLUP);  //낙하산 커넥트핀 상태 설정
-
   // sd
   if (!SD.begin(SD_CS_PIN)) {
     Serial.println("SD init failed!");
@@ -614,7 +610,7 @@ void loop() {
       && ((flight.imu.ax) * (flight.imu.ax) +
          (flight.imu.ay) * (flight.imu.ay) + 
          (flight.imu.az) * (flight.imu.az) >  
-         (9.8 * 1.2) * (9.8 * 1.2))) { //이거 나중에 수정해야 함
+         (9.8 * 2) * (9.8 * 2))) { //이거 나중에 수정해야 함
     launchTimeStarted = true;
     launchTimeMs = millis();  // T0
     Serial.println("발사 시간 측정!");
@@ -666,7 +662,7 @@ void loop() {
     bool isCount = false;
     unsigned long flightTimeMs = millis() - launchTimeMs;
 
-    if (flightTimeMs >= 1000000 && !g_parachuteDeployed) {  // 1,000ms = 10초
+    if (flightTimeMs >= 10000 && !g_parachuteDeployed) {  // 1,000ms = 10초
       Serial.println("낙하산 사출! - 10초 조건");
       deployCtl.state = DEPLOY_PUNCH;
       g_parachuteDeployed = true;
