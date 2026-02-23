@@ -194,7 +194,7 @@ void pollB2A(Stream& link) {
 
 
           Serial.print("RECV B->A parachute=");
-          Serial.println(g_parachuteFromB);
+         
 
           st = WAIT_S1;
         }
