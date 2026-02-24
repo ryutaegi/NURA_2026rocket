@@ -103,7 +103,7 @@ export default function RocketData({ telemetry }: RocketDataProps) {
             <span className="font-mono text-red-400">{telemetry.longitude.toFixed(6)}°</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-gray-400">fix</span>
+            <span className="text-gray-400">위성 수</span>
             <span className="font-mono text-red-400">{Math.floor(telemetry.connect/10)}개</span>
           </div>
         </div>
