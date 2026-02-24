@@ -32,9 +32,9 @@ export default function RocketData({ telemetry }: RocketDataProps) {
     },
     {
       label: '커넥트핀',
-      value: telemetry.connect === 1 ? '해제됨' : '연결됨',
+      value: telemetry.connect % 10 === 1 ? '해제됨' : '연결됨',
       icon: Pin, // Droplet 아이콘 사용
-      color: telemetry.connect === 1 ? 'text-blue-400' : 'text-red-400',
+      color: telemetry.connect % 10 === 1 ? 'text-blue-400' : 'text-red-400',
     },
     {
       label: '낙하산',
@@ -101,6 +101,10 @@ export default function RocketData({ telemetry }: RocketDataProps) {
           <div className="flex items-center justify-between">
             <span className="text-gray-400">경도</span>
             <span className="font-mono text-red-400">{telemetry.longitude.toFixed(6)}°</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-gray-400">fix</span>
+            <span className="font-mono text-red-400">{Math.floor(telemetry.connect/10)}개</span>
           </div>
         </div>
       </div>
