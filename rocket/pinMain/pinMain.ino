@@ -11,6 +11,12 @@
 
 //누적값
 float yaw_drift_total = 0.00f; 
+
+static float yaw_lowpass = 0.0f;
+static float drift_estimate = 0.0f;
+static uint32_t stable_count = 0;
+static uint32_t last_stable_time = 0;
+
 // [Spike Filter 변수]
 static int      spikeCounter = 0;
 static const int MAX_SPIKE_COUNT = 4; // n회 이상 튀면 FLT_MAX 처리
@@ -316,11 +322,18 @@ void loop() {
 
 
     processIMU();  // 상보필터 업데이트
-    
-   
-     // 누적값 제거 
-     yaw_drift_total = yaw_drift_total - 0.000f;            // ?초당 0.00053° 누적
-    flightData.filterRoll =flightData.filterRoll+ yaw_drift_total;        // 누적값 
+
+
+      // yaw_lowpass = flightData.filterRoll ;
+      //    float this_change = yaw_lowpass - drift_estimate;
+      // drift_estimate = yaw_lowpass;
+      
+      // // 4. 즉시 보정 (매우 작은 값!)
+      // flightData.filterRoll= flightData.filterRoll   +this_change;
+      
+    //  // 누적값 제거 
+    //  yaw_drift_total = yaw_drift_total + 0.0019f;            // ?초당 0.00053° 누적
+    // flightData.filterRoll =flightData.filterRoll+ yaw_drift_total;        // 누적값 
     
    
 
@@ -394,7 +407,17 @@ void loop() {
  //        Serial.print(imuData.gx, 2); Serial.print(F("//"));
  //       Serial.print(imuData.gx, 2);  Serial.print(F("//"));
   //      Serial.print(imuData.gx, 2); Serial.print(F("//"));
-  Serial.println(flightData.filterRoll, 6);
+
+
+    Serial.print(100); Serial.print(",");
+   Serial.print(-100); Serial.print(",");
+     Serial.print(flightData.roll, 6);
+Serial.print(",");
+  Serial.print(flightData.pitch, 6);
+Serial.print(",");
+  Serial.println(flightData.yaw, 6);
+
+  //Serial.println(flightData.filterRoll, 6);
  // Serial.print(" Servo1: "); Serial.print(servoDeg1, 1);
  // Serial.print(" Servo2: "); Serial.println(servoDeg2, 1);
 

@@ -83,6 +83,25 @@ static inline uint8_t packPhaseChute(uint8_t phase, bool chute) {
   return (uint8_t)(phase * 10 + (chute ? 1 : 0));
 }
 
+static inline uint8_t packGpsConnSound(uint8_t sats, bool fix, bool connectDetached, bool soundClicked)
+{
+  //십의 자리
+  uint8_t gps = 0;
+  if (fix) {
+    if (sats > 9) sats = 9;
+    gps = sats;
+  }
+
+  //일의 자리
+  uint8_t cs = 0;
+  if      (!connectDetached && !soundClicked) cs = 0;
+  else if ( connectDetached && !soundClicked) cs = 1;
+  else if (!connectDetached &&  soundClicked) cs = 2;
+  else                                        cs = 3;
+
+  return (uint8_t)(gps * 10 + cs);
+}
+
 // ======================= LoRa init =======================
 void initLora() {
   LORA_PORT.begin(LORA_BAUD);
@@ -116,11 +135,18 @@ void sendLoraFromFlight(const FlightData& f, bool parachuteDeployed, uint8_t con
   // temp: C * 100 -> int16
   push16_be_i(buf, idx, clamp_i16(iround(f.baro.temperature * 100.0f)));
 
-  // connect 1byte 연결되면 0, 아니면 1
-  buf[idx++] = connect;
+  // Gps + connect + Sound
+  //buf[idx++] = connect;
+  buf[idx++] = packGpsConnSound(
+                f.gps.sats,
+                f.gps.fix,
+                connectDetached,
+                soundClicked
+             );
 
   // state + parachute
   buf[idx++] = packPhaseChute((uint8_t)f.state, parachuteDeployed);
+
 
   // base64
   //String payload = base64Encode(buf, idx);

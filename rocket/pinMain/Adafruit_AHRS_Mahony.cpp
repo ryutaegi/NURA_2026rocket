@@ -4,8 +4,8 @@
 //-------------------------------------------------------------------------------------------
 
 #define DEFAULT_SAMPLE_FREQ 200.0f // sample frequency in Hz
-float twoKpDef = (2.0f * 2.0f);     // 2 * proportional gain
-float twoKiDef = (2.0f * 0.101f);     // 2 * integral gain
+float twoKpDef = (2.0f * 1.5f);     // 2 * proportional gain
+float twoKiDef = (2.0f * 0.23f);     // 2 * integral gain
 //-------------------------------------------------------------------------------------------
 //업데이트
 
@@ -33,8 +33,8 @@ void Adafruit_Mahony::update(float gx, float gy, float gz, float ax, float ay,
   float halfvx, halfvy, halfvz, halfwx, halfwy, halfwz;
   float halfex, halfey, halfez;
   float qa, qb, qc;
-float twoKpDef =(2.0f * 2.0f);     // 2 * proportional gain
-float twoKiDef =(2.0f * 0.01f);     // 2 * integral gain
+float twoKpDef =(2.0f * 5.0f);     // 2 * proportional gain
+float twoKiDef =(2.0f * 0.8f);     // 2 * integral gain
 
 
   // 가속도계 측정값이 유효할때
