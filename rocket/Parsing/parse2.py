@@ -99,8 +99,8 @@ def parse_bin_to_csv(bin_path: Path, csv_path: Path):
 def main():
     if len(sys.argv) < 2:
         print("사용법:")
-        print("  python parse_flight_bin.py FL0001.BIN")
-        print("  python parse_flight_bin.py FL0001.BIN output.csv")
+        print("  python3 parse2.py FL0001.BIN")
+        print("  python3 parse2.py FL0001.BIN output.csv")
         return 1
 
     bin_path = Path(sys.argv[1])

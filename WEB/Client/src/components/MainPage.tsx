@@ -228,13 +228,13 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
       if (data.connect % 10 == 3) { //커넥트핀 해제
         toast.success(data.message || "카운트다운이 시작되었습니다.");
         playSound("/sounds/count.mp3");
-        data.connect = Math.floor(data.connect / 10) + 1;
+        data.connect = Math.floor(data.connect / 10) * 10 + 1;
       }
 
       if (data.connect % 10 == 2) { //커넥트핀 연결
         toast.success(data.message || "카운트다운이 시작되었습니다.");
         playSound("/sounds/count.mp3");
-        data.connect = Math.floor(data.connect / 10) + 0;
+        data.connect = Math.floor(data.connect / 10) * 10 + 0;
       }
 
       setTelemetry({

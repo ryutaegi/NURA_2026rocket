@@ -18,8 +18,8 @@
 
 static const int SD_CS_PIN = 10;
 const int EEPROM_ADDR_IDX = 0;          // EEPROM에 uint16_t 인덱스 저장 주소
-const uint32_t LOG_PERIOD_MS = 100;      // 20Hz
-const uint32_t FLUSH_PERIOD_MS = 10000;  // 1초
+const uint32_t LOG_PERIOD_MS = 100;      // 10Hz
+const uint32_t FLUSH_PERIOD_MS = 10000;  // 10초
 File logFile;
 
 JudgeCounters jc;
@@ -672,7 +672,7 @@ void loop() {
     bool isCount = false;
     unsigned long flightTimeMs = millis() - launchTimeMs;
 
-    if (flightTimeMs >= 1000000 && !g_parachuteDeployed) {  // 1,000ms = 10초
+    if (flightTimeMs >= 10000 && !g_parachuteDeployed) {  // 1,000ms = 1초
       Serial.println("낙하산 사출! - 10초 조건");
       deployCtl.state = DEPLOY_PUNCH;
       g_parachuteDeployed = true;

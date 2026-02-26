@@ -29,7 +29,7 @@ bool isConnectOrDeteached(int connectPin)  //분리되면 참으로 판단
 
 bool isAccelOver(const ImuData& imu) {  //제곱값 비교로 바꿈
   const float G = 9.81;
-  const float THRESHOLD_SQ = (1.1 * G) * (1.1 * G);  //임계값은 적절하게 조정하기
+  const float THRESHOLD_SQ = (2 * G) * (2 * G);  //임계값은 적절하게 조정하기
   float magSq = imu.ax * imu.ax + imu.ay * imu.ay + imu.az * imu.az;
   return magSq >= THRESHOLD_SQ;
 }

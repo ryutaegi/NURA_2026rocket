@@ -150,6 +150,10 @@ void handleLoraRx() { // 로켓으로부터의 텔레메트리 수신 함수
 
   if(sound == true) { //소리버튼 클릭
   //Serial.println("SOUND send (\"E\")");
+    // if(raw[idx] == 1) 
+    //   packet.connect = 3; //커넥트핀 해제
+    // else
+    //   packet.connect = 2; //커넥트핀 연결
     if(raw[idx]%10 == 1) 
       packet.connect = raw[idx]/10 + 3; //커넥트핀 해제
     else
@@ -265,4 +269,3 @@ void loop() {
   // if(lora.available())
   // Serial.write(lora.read());
   }
-
