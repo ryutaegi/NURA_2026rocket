@@ -19,7 +19,7 @@
 static const int SD_CS_PIN = 10;
 const int EEPROM_ADDR_IDX = 0;          // EEPROM에 uint16_t 인덱스 저장 주소
 const uint32_t LOG_PERIOD_MS = 100;      // 10Hz
-const uint32_t FLUSH_PERIOD_MS = 10000;  // 10초
+const uint32_t FLUSH_PERIOD_MS = 1000;  // 1초
 File logFile;
 
 JudgeCounters jc;
