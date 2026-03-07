@@ -10,6 +10,18 @@
 #include "lora.h"
 #include "parachute.h"
 #include "flightType.h"
+#include "debug.h" 
+/* 이걸로 디버깅하면 됨
+예시)
+debugln("System start");
+
+debugln("Init GPS");
+debugln("Init BMP280");
+debugln("Init SD");
+
+debugVar(altitude);
+debugVar(speed);
+*/
 
 
 
