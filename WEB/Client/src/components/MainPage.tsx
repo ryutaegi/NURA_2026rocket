@@ -26,6 +26,7 @@ export interface RocketTelemetry {
   battery: number;
   connect: number; // 새로 추가
   parachuteStatus: number; // 새로 추가 (0: 닫힘, 1: 열림)
+  parachuteEjectReason: number; // 0: 알 수 없음, 1: 비상사출, 2: 고도하강, 3: 시간지연
   flightPhase: number; // 새로 추가 (0: STANDBY, 1: LAUNCHED, ...)
 }
 
@@ -66,6 +67,7 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
     battery: 0,
     connect: 0, // 초기값
     parachuteStatus: 0, // 초기값
+    parachuteEjectReason: 0, // 초기값
     flightPhase: 0, // 초기값
   });
 
@@ -82,6 +84,9 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
   const [replayData, setReplayData] = useState<any>(null);
   const [showConnectedBanner, setShowConnectedBanner] = useState(false);
   const recordingStartTime = useRef<number>(0);
+  const [rollHistory, setRollHistory] = useState<{ t: number; roll: number }[]>([]);
+  const rollHistoryRef = useRef<{ t: number; roll: number }[]>([]);
+  const ROLL_HISTORY_MAX = 100;
 
   const unlockAudio = async () => {
     const audio = audioRef.current;
@@ -251,8 +256,14 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
         battery: data.battery,
         connect: data.connect,
         parachuteStatus: data.parachuteStatus,
+        parachuteEjectReason: data.parachuteEjectReason ?? 0,
         flightPhase: data.flightPhase,
       });
+
+      const newEntry = { t: Date.now(), roll: data.roll };
+      const updated = [...rollHistoryRef.current, newEntry].slice(-ROLL_HISTORY_MAX);
+      rollHistoryRef.current = updated;
+      setRollHistory(updated);
     } else if (lastMessage.type === 'recording_started') {
       console.log('기록 시작됨:', lastMessage.recordingId);
     } else if (lastMessage.type === 'recording_stopped') {
@@ -343,6 +354,7 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
       battery: currentData.battery,
       connect: currentData.connect,
       parachuteStatus: currentData.parachuteStatus,
+      parachuteEjectReason: currentData.parachuteEjectReason ?? 0,
       flightPhase: currentData.flightPhase,
     });
   }, [isReplayMode, replayTime, replayData]);
@@ -387,6 +399,7 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
       battery: 100,
       connect: 0,
       parachuteStatus: 0,
+      parachuteEjectReason: 0,
       flightPhase: 0,
     });
   };
@@ -507,7 +520,7 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
 
           {/* 로켓 데이터 */}
           <div className="bg-gray-900/50 backdrop-blur-sm rounded-xl p-4 flex-1 border border-white/5">
-            <RocketData telemetry={telemetry} />
+            <RocketData telemetry={telemetry} rollHistory={rollHistory} />
           </div>
 
           {/* 리플레이 컨트롤 */}

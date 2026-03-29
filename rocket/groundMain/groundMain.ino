@@ -1,14 +1,15 @@
 #include <SoftwareSerial.h>
+#include <string.h>
+#include <ctype.h>
 
 SoftwareSerial lora(2, 3); // RX, TX
 
 int ejection = false;
 int sound = false;
+
 struct __attribute__((packed)) FlightDataPacket {
-  // 시작을 알리는 Sync Byte (1 byte)
   const uint8_t start_byte = 0xAA;
 
-  // 데이터 필드 (42 bytes)
   float roll;
   float pitch;
   float yaw;
@@ -19,13 +20,11 @@ struct __attribute__((packed)) FlightDataPacket {
   float connect;
   float speed;
   float pressure;
-  uint8_t para;  // 0 or 1
-  uint8_t phase; // FlightState enum 값
+  uint8_t para;
+  uint8_t phase;
 
-  // 간단한 체크섬 (모든 데이터 바이트를 더한 값) (1 byte)
   uint8_t checksum;
-}; // 총 44 바이트
-
+};
 
 const char* b64 =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -35,10 +34,11 @@ int b64Index(char c) {
   return p ? (p - b64) : 0;
 }
 
-int base64Decode(const String& in, uint8_t* out) {
+int base64Decode(const char* in, uint8_t* out) {
+  int len = strlen(in);
   int outLen = 0;
 
-  for (int i = 0; i < in.length(); i += 4) {
+  for (int i = 0; i < len; i += 4) {
     uint32_t n = 0;
     int pad = 0;
 
@@ -59,12 +59,6 @@ int base64Decode(const String& in, uint8_t* out) {
   return outLen;
 }
 
-// float readFloat(const uint8_t* buf, int& idx) {
-//   union { float f; uint8_t b[4]; } u;
-//   for (int i = 0; i < 4; i++) u.b[i] = buf[idx++];
-//   return u.f;
-// }
-
 int16_t read16(const uint8_t* buf, int& idx) {
   int16_t v = (buf[idx] << 8) | buf[idx + 1];
   idx += 2;
@@ -80,21 +74,52 @@ int32_t read32(const uint8_t* buf, int& idx) {
   return v;
 }
 
-void handleLoraRx() { // 로켓으로부터의 텔레메트리 수신 함수
+// trim 함수
+void trim(char* str) {
+  int len = strlen(str);
+
+  int start = 0;
+  while (isspace(str[start])) start++;
+
+  int end = len - 1;
+  while (end >= start && isspace(str[end])) end--;
+
+  int i = 0;
+  for (int j = start; j <= end; j++) {
+    str[i++] = str[j];
+  }
+  str[i] = '\0';
+}
+
+// =======================
+// LoRa RX 처리
+// =======================
+void handleLoraRx() {
   if (!lora.available()) return;
 
-  String line = lora.readStringUntil('\n');
-  line.trim();
-  //Serial.println(line);
+  char line[128];
+  int len = lora.readBytesUntil('\n', line, sizeof(line) - 1);
+  line[len] = '\0';
 
-  if (!line.startsWith("+RCV=")) return;
+  trim(line);
 
-  int p1 = line.indexOf(',');
-  int p2 = line.indexOf(',', p1 + 1);
-  int p3 = line.indexOf(',', p2 + 1);
-  if (p3 < 0) return;
+  if (strncmp(line, "+RCV=", 5) != 0) return;
 
-  String payload = line.substring(p2 + 1, p3);
+  char* p1 = strchr(line, ',');
+  if (!p1) return;
+
+  char* p2 = strchr(p1 + 1, ',');
+  if (!p2) return;
+
+  char* p3 = strchr(p2 + 1, ',');
+  if (!p3) return;
+
+  int payloadLen = p3 - (p2 + 1);
+  if (payloadLen <= 0 || payloadLen > 100) return;
+
+  char payload[128];
+  strncpy(payload, p2 + 1, payloadLen);
+  payload[payloadLen] = '\0';
 
   uint8_t raw[64];
   int rawLen = base64Decode(payload, raw);
@@ -109,163 +134,116 @@ void handleLoraRx() { // 로켓으로부터의 텔레메트리 수신 함수
     Serial.print("SYNC ERROR: ");
     Serial.println(raw[0], HEX);
     return;
-  }  
+  }
 
   int idx = 1;
-
-  // int16_t roll_i  = 
-  // int16_t pitch_i = 
-  // int16_t yaw_i   =
-
-  // int32_t lat_i = read32(raw, idx);
-  // int32_t lon_i = r
-
-  // uint16_t alt_i = 
-  // int16_t temp_i = 
-
-  // uint8_t hum   = raw[idx++];
-  // uint8_t phase  = 
-  // uint8_t para = 
-
-  // float roll  = roll_i  / 100.0;
-  // float pitch = pitch_i / 100.0;
-  // float yaw   = yaw_i   / 100.0;
-
-  // float lat = lat_i / 1e7;
-  // float lon = lon_i / 1e7;
-
-  // float alt  = alt_i / 10.0;
-  // float temp = temp_i / 100.0;
-
   FlightDataPacket packet;
-  
-  packet.roll = read16(raw, idx) / 100.0;
+
+  packet.roll  = read16(raw, idx) / 100.0;
   packet.pitch = read16(raw, idx) / 100.0;
-  packet.yaw = read16(raw, idx) / 100.0;
+  packet.yaw   = read16(raw, idx) / 100.0;
 
   packet.lat = read32(raw, idx) / 1e7;
   packet.lon = read32(raw, idx) / 1e7;
-  packet.alt = read16(raw, idx) / 100;
+  packet.alt = read16(raw, idx) / 100.0;
   packet.temp = read16(raw, idx) / 100.0;
 
-  if(sound == true) { //소리버튼 클릭
-  //Serial.println("SOUND send (\"E\")");
-    // if(raw[idx] == 1) 
-    //   packet.connect = 3; //커넥트핀 해제
-    // else
-    //   packet.connect = 2; //커넥트핀 연결
-    if(raw[idx]%10 == 1) 
-      packet.connect = raw[idx]/10 + 3; //커넥트핀 해제
+  if (sound == true) {
+    if (raw[idx] % 10 == 1)
+      packet.connect = raw[idx] / 10 + 3;
     else
-      packet.connect = raw[idx]/10 + 2; //커넥트핀 연결
-  idx++;
-  sound = false;
+      packet.connect = raw[idx] / 10 + 2;
+
+    idx++;
+    sound = false;
+  } else {
+    packet.connect = raw[idx++];
   }
-  else
-  packet.connect= raw[idx++];
+
   packet.phase = raw[idx] / 10;
-  if(ejection==true){
+
+  if (ejection == true) {
     packet.para = 2;
     ejection = false;
     idx++;
+  } else {
+    packet.para = raw[idx++] % 10;
   }
-  else
-  packet.para = raw[idx++] % 10;
-  packet.pressure = random(500, 1000);   
-  packet.speed = random(0, 100); 
 
-  // 체크섬 계산
+  packet.pressure = random(500, 1000);
+  packet.speed = random(0, 100);
+
   packet.checksum = 0;
   uint8_t* bytes = (uint8_t*)&packet;
-  // start_byte는 제외하고 checksum 필드 전까지 더합니다.
   for (size_t i = 1; i < sizeof(packet) - 1; ++i) {
     packet.checksum += bytes[i];
   }
 
-  // 시리얼 포트로 패킷 전송
   Serial.write((uint8_t*)&packet, sizeof(packet));
-
-
-  // Serial.print("ROLL=");  Serial.print(packet.roll);
-  // Serial.print(" PITCH=");Serial.print(packet.pitch);
-  // Serial.print(" YAW=");  Serial.print(packet.yaw);
-  // Serial.print(" LAT=");  Serial.print(packet.lat, 7);
-  // Serial.print(" LON=");  Serial.print(packet.lon, 7);
-  // Serial.print(" ALT=");  Serial.print(packet.alt);
-  // Serial.print(" TEMP="); Serial.print(packet.temp);
-  // Serial.print(" CONNECT=");  Serial.print(packet.connect);
-  // Serial.print(" PARA="); Serial.print(packet.para);
-  // Serial.print(" PHASE=");Serial.println(packet.phase);
-
-  // if(Serial.available())
-  // lora.write(Serial.read());
-  // if(lora.available())
-  // Serial.write(lora.read())
 }
 
-
-void handleWebCommand() { // 웹으로부터의 명령 처리 함수
+// =======================
+// 웹 명령 처리
+// =======================
+void handleWebCommand() {
   if (!Serial.available()) return;
 
-  String cmd = Serial.readStringUntil('\n');
-  cmd.trim();
+  char cmd[32];
+  int len = Serial.readBytesUntil('\n', cmd, sizeof(cmd) - 1);
+  cmd[len] = '\0';
 
-  if (cmd == "EJECT") {
+  trim(cmd);
+
+  if (strcmp(cmd, "EJECT") == 0) {
     digitalWrite(13, HIGH);
     sendEmergencyDeploy();
   }
-  else if(cmd == "RESET") {
+  else if (strcmp(cmd, "RESET") == 0) {
     digitalWrite(13, LOW);
     sendReset();
   }
 }
 
-void sendEmergencyDeploy() { // LoRa 비상 사출 송신 함수
-  for(int i=0; i<10; i++){
-  lora.print("AT+SEND=1,1,E\r\n");
-  delay(50);
+// =======================
+// 송신 함수
+// =======================
+void sendEmergencyDeploy() {
+  for (int i = 0; i < 10; i++) {
+    lora.print("AT+SEND=1,1,E\r\n");
+    delay(50);
   }
-  //Serial.println("[lora] EMERGENCY DEPLOY SENT (\"E\")");
 }
 
-void sendReset() { // LoRa 중앙 정렬 송신 함수
-  for(int i=0; i<10; i++){
-  lora.print("AT+SEND=1,1,R\r\n");
-  delay(50);
+void sendReset() {
+  for (int i = 0; i < 10; i++) {
+    lora.print("AT+SEND=1,1,R\r\n");
+    delay(50);
   }
-  //Serial.println("[lora] CENTER SENT (\"C\")");
 }
 
-
+// =======================
+// setup / loop
+// =======================
 void setup() {
   Serial.begin(115200);
-  lora.begin(9600);
+  lora.begin(28800);
   Serial.println("RX READY");
+
   pinMode(13, OUTPUT);
   pinMode(8, INPUT_PULLUP);
   pinMode(9, INPUT_PULLUP);
 }
 
-
 void loop() {
   handleLoraRx();
   handleWebCommand();
-  
-  if(digitalRead(9)==LOW)
-  {
+
+  if (digitalRead(9) == LOW) {
     ejection = true;
     sendEmergencyDeploy();
   }
-  if(digitalRead(8)==LOW)
-  {
+
+  if (digitalRead(8) == LOW) {
     sound = true;
-    //Serial.println("test");
   }
-
-
-
-  // if(Serial.available())
-  // lora.write(Serial.read());
-  // if(lora.available())
-  // Serial.write(lora.read());
-  }
+}

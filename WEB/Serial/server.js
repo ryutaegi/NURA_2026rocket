@@ -170,7 +170,7 @@ let recordedData = [];
 
 // 시리얼 포트 설정 (아두이노 연결)
 // COM 포트는 환경에 맞게 수정 필요 (예: Windows - 'COM3', macOS/Linux - '/dev/tty.usbserial-XXXX')
-const SERIAL_PORT = '/dev/tty.usbserial-110'; // 실제 포트로 변경하세요
+const SERIAL_PORT = '/dev/tty.usbserial-130'; // 실제 포트로 변경하세요
 const BAUD_RATE = 115200; // 아두이노와 동일하게 설정
 
 let serialPort;
@@ -196,6 +196,7 @@ const createTestData = () => {
     battery: 100 - Math.random() * 100,
     connect: Math.floor(Math.random() * 2),
     parachuteStatus: Math.floor(Math.random() * 2),
+    parachuteEjectReason: 0, // 0: 알 수 없음, 1: 비상사출, 2: 고도하강, 3: 시간지연
     flightPhase: Math.floor(Math.random() * 7),
   };
 };

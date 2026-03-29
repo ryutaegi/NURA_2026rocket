@@ -159,7 +159,7 @@ export default function LaunchHistoryPage() {
         )} */}
 
         {/* 통계 카드 - 모바일에서는 2컬럼 강제 */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-3 gap-3 mb-6">
           <div className="bg-gray-800 rounded-lg p-4">
             <div className="text-gray-400 text-sm mb-1">총 발사 횟수</div>
             <div className="text-2xl text-white">{launches.length}</div>
@@ -174,12 +174,6 @@ export default function LaunchHistoryPage() {
             <div className="text-gray-400 text-sm mb-1">최고 고도</div>
             <div className="text-2xl text-blue-400">
               {launches.length > 0 ? Math.max(...launches.map(l => l.maxAltitude)).toLocaleString() : 0}m
-            </div>
-          </div>
-          <div className="bg-gray-800 rounded-lg p-4">
-            <div className="text-gray-400 text-sm mb-1">최고 속도</div>
-            <div className="text-2xl text-purple-400">
-              {launches.length > 0 ? Math.max(...launches.map(l => l.maxSpeed)) : 0} m/s
             </div>
           </div>
         </div>
@@ -236,23 +230,26 @@ export default function LaunchHistoryPage() {
                       >
                         <Download className="w-4 h-4" />
                       </button>
+                      {isConnected && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(launch.id);
+                          }}
+                          className="bg-red-600/20 hover:bg-red-600/40 text-red-400 p-2.5 rounded-lg text-sm flex items-center gap-1 transition-colors border border-red-500/30"
+                          title="기록 삭제"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleDelete(launch.id);
+                          if (isConnected) handleStatusToggle(launch);
                         }}
-                        className="bg-red-600/20 hover:bg-red-600/40 text-red-400 p-2.5 rounded-lg text-sm flex items-center gap-1 transition-colors border border-red-500/30"
-                        title="기록 삭제"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleStatusToggle(launch);
-                        }}
-                        className={`text-xs px-3 py-2.5 rounded-lg text-white font-bold cursor-pointer transition-all ${getStatusColor(launch.status)}`}
-                        title="상태 변경"
+                        disabled={!isConnected}
+                        className={`text-xs px-3 py-2.5 rounded-lg text-white font-bold transition-all ${isConnected ? `cursor-pointer ${getStatusColor(launch.status)}` : 'cursor-default bg-gray-700 opacity-50'}`}
+                        title={isConnected ? '상태 변경' : '로컬 서버 연결 시 수정 가능'}
                       >
                         {getStatusText(launch.status)}
                       </button>
@@ -276,10 +273,6 @@ export default function LaunchHistoryPage() {
                         <TrendingUp className="w-3 h-3" />
                         {typeof launch.maxAltitude === 'number' ? launch.maxAltitude.toLocaleString() : 'N/A'} m
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400 text-xs mb-1">최대 속도</div>
-                      <div className="text-purple-400">{launch.maxSpeed.toFixed(1)} m/s</div>
                     </div>
                     <div>
                       <div className="text-gray-400 text-xs mb-1">녹화 시간</div>
