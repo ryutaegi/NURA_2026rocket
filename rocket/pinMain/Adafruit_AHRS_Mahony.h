@@ -1,7 +1,7 @@
 
 #ifndef __Adafruit_Mahony_h__
 #define __Adafruit_Mahony_h__
-#include "Adafruit_AHRS_FusionInterface.h"
+
 #include <math.h>
 
 
@@ -10,8 +10,12 @@ private:
 
 
 public:
-  float twoKp;
-  float twoKi; 
+float twoKp;          // 2 * proportional gain (Kp)
+    float twoKi;
+  float kp9;
+  float ki9; 
+  bool isStatic;
+  float accelNorm; 
   float q0, q1, q2, q3; 
   float integralFBx, integralFBy, integralFBz; 
   float invSampleFreq;

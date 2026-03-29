@@ -9,11 +9,14 @@
 #define PIN_CONNECT_DETECT 2
 
 
+// float diff = 0.0f;
+// float prevValue = 0.0f;         // 이전값 저장용
+// const float THRESHOLD = 0.05f;
 //누적값
 float yaw_drift_total = 0.00f; 
 
 static float yaw_lowpass = 0.0f;
-static float drift_estimate = 0.0f;
+static float drift_estimate = 0.0f;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
 static uint32_t stable_count = 0;
 static uint32_t last_stable_time = 0;
 
@@ -35,11 +38,11 @@ static const uint8_t  MOTOR_CH2   = 1;
 static const uint16_t SERVO_MIN_US = 500;
 static const uint16_t SERVO_MAX_US = 2500;
 
-static const float   SERVO_NEUTRAL_DEG1 = 91.7f;  //흰
+static const float   SERVO_NEUTRAL_DEG1 = 74.0f;  //흰
 static const float   SERVO_NEUTRAL_DEG2 = 83.5f;  //검
 
 // [설정] 서보 물리적 제한 각도
-static const float    MAX_SERVO_LIMIT = 35.0f; 
+static const float    MAX_SERVO_LIMIT = 24.4f; 
 
 // 이전 yaw  
 static float prev_yaw = 0.0f;
@@ -230,7 +233,7 @@ void setup() {
   pinMode(PIN_CONNECT_DETECT, INPUT);
   if (digitalRead(PIN_CONNECT_DETECT) == LOW) 
   {
-    Serial.println("sweepOnce");
+   
     sweepOnce();
     delay(10);
   }
@@ -256,7 +259,9 @@ void setup() {
   
  
 }
-float yaw_drift_total = 0.00f; 
+  // float prevValue = 0.0f;  
+  // float diff = 0.0f;
+  // flightData.diff_total = 0.0f;
 }
 
 void loop() {
@@ -321,21 +326,24 @@ void loop() {
   if (dataAvailable) {
 
 
-    processIMU();  // 상보필터 업데이트
+     processIMU();  // 상보필터 업데이트
+
+  //   diff = flightData.filterRoll - prevValue;
+  //   //3. 차이가 0.01 초과 시 무시 (diff = 0으로 처리)
+  //   if (abs(diff) > THRESHOLD) {
+  //     diff = 0.0f;  // 또는 prevValue 유지
+  //   }
+  //   flightData.diff_total = flightData.diff_total + diff;
+  //   // 4. 원래값에서 보정
+  //   flightData.filterRoll = flightData.filterRoll + flightData.diff_total;
+
+  //   prevValue = flightData.filterRoll;
 
 
-      // yaw_lowpass = flightData.filterRoll ;
-      //    float this_change = yaw_lowpass - drift_estimate;
-      // drift_estimate = yaw_lowpass;
-      
-      // // 4. 즉시 보정 (매우 작은 값!)
-      // flightData.filterRoll= flightData.filterRoll   +this_change;
-      
-    //  // 누적값 제거 
-    //  yaw_drift_total = yaw_drift_total + 0.0019f;            // ?초당 0.00053° 누적
-    // flightData.filterRoll =flightData.filterRoll+ yaw_drift_total;        // 누적값 
-    
-   
+  // if (flightData.filterRoll > 180.00f) {
+  //   flightData.filterRoll -= 360.0f;  // -180~180 변환
+  // }
+
 
     bool isSpike = (abs(myICM.accX()) > ACCEL_AXIS_LIMIT) || (abs(myICM.accY()) > ACCEL_AXIS_LIMIT) || (abs(myICM.accZ()) > ACCEL_AXIS_LIMIT);
 
@@ -374,22 +382,20 @@ void loop() {
 
   prev_yaw = yaw_deg; 
 
-    float servoOffset1, servoOffset2;
+ float servoOffset;
  if (yaw_deg <= 0.0f) {
     // -180 ~ 0 → -10 ~ 0
     float servoOffset = fmap(yaw_deg, -360.0f, 0.0f, -MAX_SERVO_LIMIT, 0.0f);
-    servoOffset1 = -servoOffset;
-    servoOffset2 = servoOffset1;  // 반대 방향 보정
+    
   } else {
     // 0 ~ 180 → 0 ~ +10
     float servoOffset = fmap(yaw_deg, 0.0f, 360.0f, 0.0f, MAX_SERVO_LIMIT);
-    servoOffset1 = -servoOffset;
-    servoOffset2 = servoOffset1;  // 반대 방향 보정
+ 
   }
   
   // 최종 서보 각도 계산 및 클램프
-  float servoDeg1 = SERVO_NEUTRAL_DEG1 + servoOffset1;
-  float servoDeg2 = SERVO_NEUTRAL_DEG2 + servoOffset2;
+  float servoDeg1 = SERVO_NEUTRAL_DEG1 + servoOffset;
+  float servoDeg2 = SERVO_NEUTRAL_DEG2 + servoOffset;
   
   
   // 안전 범위 제한 
@@ -403,21 +409,22 @@ void loop() {
   
 
 
-  //Serial.print("Yaw: "); 
- //        Serial.print(imuData.gx, 2); Serial.print(F("//"));
- //       Serial.print(imuData.gx, 2);  Serial.print(F("//"));
-  //      Serial.print(imuData.gx, 2); Serial.print(F("//"));
+  // Serial.print("Yaw: "); 
+      //   Serial.print(imuData.ax, 2); Serial.print(F("//"));
+      //  Serial.print(imuData.ay, 2);  Serial.print(F("//"));
+      //  Serial.print(imuData.az, 2); Serial.println(F("//"));
 
 
-    Serial.print(100); Serial.print(",");
-   Serial.print(-100); Serial.print(",");
-     Serial.print(flightData.roll, 6);
-Serial.print(",");
-  Serial.print(flightData.pitch, 6);
-Serial.print(",");
-  Serial.println(flightData.yaw, 6);
+//     Serial.print(0.5); Serial.print(",");
+//    Serial.print(-0.5); Serial.print(",");
+   Serial.print(",");
+     Serial.print(flightData.filterRoll, 6);
+// Serial.print(",");
+//   Serial.print(flightData.pitch, 6);
+// Serial.print(",");
+//   Serial.print(flightData.yaw, 6);
 
-  //Serial.println(flightData.filterRoll, 6);
+  // Serial.println(flightData.filterRoll, 6);
  // Serial.print(" Servo1: "); Serial.print(servoDeg1, 1);
  // Serial.print(" Servo2: "); Serial.println(servoDeg2, 1);
 

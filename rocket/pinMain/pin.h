@@ -30,6 +30,7 @@ struct FlightData {
     float filterRoll;
     float servoDegree;  // 상보필터로 보정한 롤 각도 (deg)
     uint32_t timeMs;
+    float diff_total;
 };
 // ======================= 사용자 설정 =======================
 
