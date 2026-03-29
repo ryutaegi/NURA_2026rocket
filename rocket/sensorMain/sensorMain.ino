@@ -73,6 +73,20 @@ static bool isValidPressure_hPa(float p) {
   return (p >= 300.0f && p <= 1100.0f);
 }  // 기압 범위가 300~1100인지 확인
 
+// 패킷 비트 변수
+bool ejectBtnClicked = false;        // bit2
+bool soundBtnClicked = false;        // bit3
+
+uint8_t satCount = f.gps.sats;       // bit7:4, 0~15
+
+uint8_t launchStage = (uint8_t)f.state; // bit7:5, 0~7
+bool chuteByEmergency = false;       // bit4
+bool chuteByDescent = false;         // bit3
+bool chuteByTimer = false;           // bit2
+
+uint8_t qIndex = 0;                  // bit1:0, 0~3
+
+
 
 
 void softwareReset() {
