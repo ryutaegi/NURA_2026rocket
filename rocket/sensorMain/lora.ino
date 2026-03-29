@@ -63,6 +63,20 @@ static inline uint8_t clamp_u8_i(int32_t x, int32_t lo, int32_t hi) {
   return (uint8_t)x;
 }
 
+static inline int16_t clamp_i16(int32_t x) {
+  if (x > 32767) return 32767;
+  if (x < -32768) return -32768;
+  return (int16_t)x;
+}
+static inline uint16_t clamp_u16(int32_t x) {
+  if (x > 65535) return 65535;
+  if (x < 0) return 0;
+  return (uint16_t)x;
+}
+
+
+static inline int32_t iround(float x) { return (x >= 0.0f) ? (int32_t)(x + 0.5f) : (int32_t)(x - 0.5f); }
+
 // alt: 0 ~ 255m
 static inline uint8_t encodeAlt(float alt_m) {
   int32_t raw = iround(alt_m);
@@ -85,18 +99,6 @@ static inline uint8_t encodeRoll8(float roll_deg) {
 }
 
 
-static inline int16_t clamp_i16(int32_t x) {
-  if (x > 32767) return 32767;
-  if (x < -32768) return -32768;
-  return (int16_t)x;
-}
-static inline uint16_t clamp_u16(int32_t x) {
-  if (x > 65535) return 65535;
-  if (x < 0) return 0;
-  return (uint16_t)x;
-}
-static inline int32_t iround(float x) { return (x >= 0.0f) ? (int32_t)(x + 0.5f) : (int32_t)(x - 0.5f); }
-
 // quaternion component (-1.0 ~ 1.0) -> int16
 static inline int16_t encodeQuatQ15(float q) {
   q = clamp_f(q, -1.0f, 1.0f);
@@ -118,30 +120,6 @@ void push32_be(uint8_t* buf, int& idx, int32_t v) {
   buf[idx++] = (uint8_t)(v & 0xFF);
 }
 
-// (state, parachute) 합치기: phase*10 + (0/1)
-static inline uint8_t packPhaseChute(uint8_t phase, bool chute) {
-  if (phase > 25) phase = 25;   // 안전 클램프(임의)
-  return (uint8_t)(phase * 10 + (chute ? 1 : 0));
-}
-
-// static inline uint8_t packGpsConnSound(uint8_t sats, bool fix, bool connectDetached, bool soundClicked)
-// {
-//   //십의 자리
-//   uint8_t gps = 0;
-//   if (fix) {
-//     if (sats > 9) sats = 9;
-//     gps = sats;
-//   }
-
-//   //일의 자리
-//   uint8_t cs = 0;
-//   if      (!connectDetached && !soundClicked) cs = 0;
-//   else if ( connectDetached && !soundClicked) cs = 1;
-//   else if (!connectDetached &&  soundClicked) cs = 2;
-//   else                                        cs = 3;
-
-//   return (uint8_t)(gps * 10 + cs);
-// }
 
 // ======================= LoRa init =======================
 void initLora() {
@@ -156,7 +134,7 @@ void sendLoraFromFlight(const FlightData& f, bool g_parachuteDeployed, bool pinD
                         bool chuteByDescent = false,
                         bool chuteByTimer = false,
                         uint8_t qIndex = 0,
-                        uint8_t rollRaw = 0) {
+                        float filterRoll = 0) {
   static uint32_t lastMs = 0;
   uint32_t nowMs = millis();
   if (nowMs - lastMs < LORA_PERIOD_MS) return;
@@ -198,7 +176,7 @@ buf[idx++] =
     ((chuteByTimer     ? 1 : 0) << 2) |
     (qIndex & 0x03);
 
-buf[idx++] = rollRaw;
+buf[idx++] = encodeRoll8(filterRoll);
 
 if (idx != 20) {
   Serial.print("LoRa packet size error: ");

@@ -77,9 +77,9 @@ static bool isValidPressure_hPa(float p) {
 bool ejectBtnClicked = false;        // bit2
 bool soundBtnClicked = false;        // bit3
 
-uint8_t satCount = f.gps.sats;       // bit7:4, 0~15
+uint8_t satCount = flight.gps.sats;       // bit7:4, 0~15
 
-uint8_t launchStage = (uint8_t)f.state; // bit7:5, 0~7
+uint8_t launchStage = (uint8_t)flight.state; // bit7:5, 0~7
 bool chuteByEmergency = false;       // bit4
 bool chuteByDescent = false;         // bit3
 bool chuteByTimer = false;           // bit2
