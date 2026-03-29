@@ -10,18 +10,16 @@ int sound = false;
 struct __attribute__((packed)) FlightDataPacket {
   const uint8_t start_byte = 0xAA;
 
-  float roll;
-  float pitch;
-  float yaw;
-  float lat;
-  float lon;
-  float alt;
-  float temp;
-  float connect;
-  float speed;
-  float pressure;
-  uint8_t para;
-  uint8_t phase;
+  int16_t q1;
+  int16_t q2;
+  int16_t q3;
+  int32_t lat;
+  int32_t lon;
+  uint8_t alt;
+  uint8_t temp;
+  uint8_t flag1;
+  uint8_t flag2;
+  uint8_t roll;
 
   uint8_t checksum;
 };
@@ -124,7 +122,7 @@ void handleLoraRx() {
   uint8_t raw[64];
   int rawLen = base64Decode(payload, raw);
 
-  if (rawLen != 21) {
+  if (rawLen != 20) {
     Serial.print("LEN ERROR: ");
     Serial.println(rawLen);
     return;
@@ -139,39 +137,48 @@ void handleLoraRx() {
   int idx = 1;
   FlightDataPacket packet;
 
-  packet.roll  = read16(raw, idx) / 100.0;
-  packet.pitch = read16(raw, idx) / 100.0;
-  packet.yaw   = read16(raw, idx) / 100.0;
+  // q1/q2/q3: Q15 인코딩 (*32767), 2바이트씩
+  packet.q1 = read16(raw, idx);
+  packet.q2 = read16(raw, idx);
+  packet.q3 = read16(raw, idx);
 
-  packet.lat = read32(raw, idx) / 1e7;
-  packet.lon = read32(raw, idx) / 1e7;
-  packet.alt = read16(raw, idx) / 100.0;
-  packet.temp = read16(raw, idx) / 100.0;
+  // lat/lon: int32 E7
+  packet.lat = read32(raw, idx);
+  packet.lon = read32(raw, idx);
 
+  // alt: 1바이트 (0~255m)
+  packet.alt = raw[idx++];
+
+  // temp: 1바이트 (-20 오프셋, 0~120 → -20~100)
+  packet.temp = raw[idx++];
+
+  
+  packet.flag1 = raw[idx++];
+  packet.flag2 = raw[idx++];
+
+
+  // connect (기존 포맷 유지: 위성개수*10 + 커넥트핀, 소리클릭시 +2/+3)
   if (sound == true) {
-    if (raw[idx] % 10 == 1)
-      packet.connect = raw[idx] / 10 + 3;
-    else
-      packet.connect = raw[idx] / 10 + 2;
-
-    idx++;
+    packet.flag1 |= 0x20; //3번비트 1로 설정
     sound = false;
   } else {
-    packet.connect = raw[idx++];
+    packet.flag1 &= ~0x20; //3번 비트 0으로 설정 
   }
 
-  packet.phase = raw[idx] / 10;
+ 
 
+  // para: 비상사출 버튼 클릭시 2, 아니면 패킷의 낙하산사출 비트
   if (ejection == true) {
-    packet.para = 2;
+    packet.flag1 |= 0x40; //2번비트 1로 설정
     ejection = false;
-    idx++;
   } else {
-    packet.para = raw[idx++] % 10;
+    packet.flag1 &= ~0x40; // 2번비트 0으로 설정
   }
 
-  packet.pressure = random(500, 1000);
-  packet.speed = random(0, 100);
+  // 바이트 19: roll값 (0~255 → -180~+180, 로켓 좌표계)
+  packet.roll = raw[idx++];
+
+  
 
   packet.checksum = 0;
   uint8_t* bytes = (uint8_t*)&packet;
