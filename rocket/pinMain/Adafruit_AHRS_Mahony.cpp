@@ -6,6 +6,7 @@
 #define DEFAULT_SAMPLE_FREQ 200.0f // sample frequency in Hz
 float twoKpDef = (2.0f * 1.5f);     // 2 * proportional gain
 float twoKiDef = (2.0f * 0.23f);     // 2 * integral gain
+
 //-------------------------------------------------------------------------------------------
 //업데이트
 
@@ -14,6 +15,8 @@ Adafruit_Mahony::Adafruit_Mahony() : Adafruit_Mahony(twoKpDef, twoKiDef) {}
 Adafruit_Mahony::Adafruit_Mahony(float prop_gain, float int_gain) {
   twoKp = prop_gain; // 2 * proportional gain (Kp)
   twoKi = int_gain;  // 2 * integral gain (Ki)
+  bool isStatic;
+  float accelNorm ;
   q0 = 1.0f;
   q1 = 0.0f;
   q2 = 0.0f;
@@ -32,106 +35,79 @@ void Adafruit_Mahony::update(float gx, float gy, float gz, float ax, float ay,
   float hx, hy, bx, bz;
   float halfvx, halfvy, halfvz, halfwx, halfwy, halfwz;
   float halfex, halfey, halfez;
-  float qa, qb, qc;
-float twoKpDef =(2.0f * 5.0f);     // 2 * proportional gain
-float twoKiDef =(2.0f * 0.8f);     // 2 * integral gain
+  float kp9 = (2.0f * 1.0f);     // 2 * proportional gain
+  float ki9 = (2.0f * 0.001f);  
+  // 가속도 벡터의 크기(Norm) 계산
+  float accelNorm = sqrtf(ax * ax + ay * ay + az * az);
 
+  // 1. 가속도계 데이터가 유효하고, '정적 상태(약 1g)'인 경우에만 보정 수행
+  // 로켓이 발사되어 가속도가 치솟으면 아래 if문은 건너뛰게 됩니다.
+  // 9.8m/s^2 기준이면 단위에 맞춰 임계값을 조절하세요. (여기서는 정규화 전 단위 기준)
+  bool isStatic = (accelNorm > 750.0f && accelNorm < 1250.0f); 
+// Serial.print(accelNorm);
+Serial.print(",");
+Serial.println(isStatic);
+  if (isStatic && !((ax == 0.0f) && (ay == 0.0f) && (az == 0.0f))) {
 
-  // 가속도계 측정값이 유효할때
-  if (!((ax == 0.0f) && (ay == 0.0f) && (az == 0.0f))) {
+    // 가속도 및 지자계 정규화
+    recipNorm = 1.0f / accelNorm;
+    ax *= recipNorm; ay *= recipNorm; az *= recipNorm;
 
-    // 가속도 정규화 => 크기 1로만들어서 방향만 사용 
-    recipNorm = invSqrt(ax * ax + ay * ay + az * az);
-    ax *= recipNorm;
-    ay *= recipNorm;
-    az *= recipNorm;
-
-    // 마그네토미터 정규화 => 크기 1로만들어서 방향만 사용 
     recipNorm = invSqrt(mx * mx + my * my + mz * mz);
-    mx *= recipNorm;
-    my *= recipNorm;
-    mz *= recipNorm;
+    mx *= recipNorm; my *= recipNorm; mz *= recipNorm;
 
-    // 쿼터니안 곱 미리계산(메모리절약)
-    q0q0 = q0 * q0;
-    q0q1 = q0 * q1;
-    q0q2 = q0 * q2;
-    q0q3 = q0 * q3;
-    q1q1 = q1 * q1;
-    q1q2 = q1 * q2;
-    q1q3 = q1 * q3;
-    q2q2 = q2 * q2;
-    q2q3 = q2 * q3;
-    q3q3 = q3 * q3;
+    // 쿼터니안 연산 보조 값
+    q0q0 = q0 * q0; q0q1 = q0 * q1; q0q2 = q0 * q2; q0q3 = q0 * q3;
+    q1q1 = q1 * q1; q1q2 = q1 * q2; q1q3 = q1 * q3;
+    q2q2 = q2 * q2; q2q3 = q2 * q3; q3q3 = q3 * q3;
 
-
-    //회전행렬
-    //수평자기장성분(hx, hy)
-    hx = 2.0f *
-         (mx * (0.5f - q2q2 - q3q3) + my * (q1q2 - q0q3) + mz * (q1q3 + q0q2));
-    hy = 2.0f *
-         (mx * (q1q2 + q0q3) + my * (0.5f - q1q1 - q3q3) + mz * (q2q3 - q0q1));
-    //수평자기장의 크기(bx)
+    // 지자계 보정 (Yaw 보정용)
+    hx = 2.0f * (mx * (0.5f - q2q2 - q3q3) + my * (q1q2 - q0q3) + mz * (q1q3 + q0q2));
+    hy = 2.0f * (mx * (q1q2 + q0q3) + my * (0.5f - q1q1 - q3q3) + mz * (q2q3 - q0q1));
     bx = sqrtf(hx * hx + hy * hy);
-    //수직자기장의 성분(hz)
-    bz = 2.0f *
-         (mx * (q1q3 - q0q2) + my * (q2q3 + q0q1) + mz * (0.5f - q1q1 - q2q2));
+    bz = 2.0f * (mx * (q1q3 - q0q2) + my * (q2q3 + q0q1) + mz * (0.5f - q1q1 - q2q2));
 
-    // 중력,자기장 방향 추정
+    // 추정된 중력 및 지자계 방향
     halfvx = q1q3 - q0q2;
     halfvy = q0q1 + q2q3;
     halfvz = q0q0 - 0.5f + q3q3;
 
     halfwx = bx * (0.5f - q2q2 - q3q3) + bz * (q1q3 - q0q2);
-    halfwy = bx * (q1q2 - q0q3) + bz * (q0q1 + q2q3);
+    halfwy = bx * (q1q2 - q0q3) + bz * (0.5f - q1+q1 + q2q3); // 오타 수정: q2q3
     halfwz = bx * (q0q2 + q1q3) + bz * (0.5f - q1q1 - q2q2);
 
-    //오차(측정방향과 추정방향의 오차)
+    // 오차 계산 (측정값과 추정값의 외적)
     halfex = (ay * halfvz - az * halfvy) + (my * halfwz - mz * halfwy);
     halfey = (az * halfvx - ax * halfvz) + (mz * halfwx - mx * halfwz);
     halfez = (ax * halfvy - ay * halfvx) + (mx * halfwy - my * halfwx);
 
-    // PI제어의 I항 오차의 누적을 통한 자이로bias 보정
+    // PI 제어 보정값 적용
     if (twoKi > 0.0f) {
-      // 오차적분
-      integralFBx += twoKi * halfex * dt;
-      integralFBy += twoKi * halfey * dt;
-      integralFBz += twoKi * halfez * dt;
-      // 보정된 자이로값
-      gx += integralFBx;  
-      gy += integralFBy;
-      gz += integralFBz;
-    } else {
-      integralFBx = 0.0f; //ki가 0일때 
-      integralFBy = 0.0f;
-      integralFBz = 0.0f;
+      integralFBx += ki9 * halfex * dt;
+      integralFBy += ki9 * halfey * dt;
+      integralFBz += ki9 * halfez * dt;
+      gx += integralFBx; gy += integralFBy; gz += integralFBz;
     }
+    gx += kp9 * halfex;
+    gy += kp9 * halfey;
+    gz += kp9 * halfez;
+    
+  } 
+  // else: 로켓 가속 중(isStatic == false)일 때는 gx, gy, gz 원본(자이로)만 사용됨
 
-    // PI제어의 P항 
-    gx += twoKp * halfex;
-    gy += twoKp * halfey;
-    gz += twoKp * halfez;
-  }
+  // 2. 쿼터니안 업데이트 (자이로 적분) - 모든 상황에서 공통 수행
+  float qa = q0, qb = q1, qc = q2;
+  gx *= (0.5f * dt); gy *= (0.5f * dt); gz *= (0.5f * dt);
 
-  //쿼터니안(센서가 지상좌표계에 얼마나 기울었는지)
-  gx *= (0.5f * dt); 
-  gy *= (0.5f * dt);
-  gz *= (0.5f * dt);
-  qa = q0;
-  qb = q1;
-  qc = q2;
   q0 += (-qb * gx - qc * gy - q3 * gz);
   q1 += (qa * gx + qc * gz - q3 * gy);
   q2 += (qa * gy - qb * gz + q3 * gx);
   q3 += (qa * gz + qb * gy - qc * gx);
 
-  // 쿼터니안 정규화
+  // 정규화
   recipNorm = invSqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
-  q0 *= recipNorm;
-  q1 *= recipNorm;
-  q2 *= recipNorm;
-  q3 *= recipNorm;
-  anglesComputed = 0;
+  q0 *= recipNorm; q1 *= recipNorm; q2 *= recipNorm; q3 *= recipNorm;
+  anglesComputed = false;
 }
 
 //-------------------------------------------------------------------------------------------

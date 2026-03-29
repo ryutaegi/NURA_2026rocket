@@ -47,15 +47,15 @@ void sweepOnce()
 
 
   
-  writeServoDeg(MOTOR_CH1, startDeg1);
-  writeServoDeg(MOTOR_CH2, startDeg2);
-  delay(500);
-   writeServoDeg(MOTOR_CH1, SERVO_NEUTRAL_DEG1);
-  writeServoDeg(MOTOR_CH2, SERVO_NEUTRAL_DEG2);
-  delay(500);
-  writeServoDeg(MOTOR_CH1, endDeg1);
-  writeServoDeg(MOTOR_CH2, endDeg2);
-delay(500);
+//   writeServoDeg(MOTOR_CH1, startDeg1);
+//   writeServoDeg(MOTOR_CH2, startDeg2);
+//   delay(500);
+//    writeServoDeg(MOTOR_CH1, SERVO_NEUTRAL_DEG1);
+//   writeServoDeg(MOTOR_CH2, SERVO_NEUTRAL_DEG2);
+//   delay(500);
+//   writeServoDeg(MOTOR_CH1, endDeg1);
+//   writeServoDeg(MOTOR_CH2, endDeg2);
+// delay(500);
 
   // 최종 중립 고정
   writeServoDeg(MOTOR_CH1, SERVO_NEUTRAL_DEG1);
