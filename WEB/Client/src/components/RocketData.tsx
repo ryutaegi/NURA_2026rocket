@@ -35,16 +35,16 @@ export default function RocketData({ telemetry, rollHistory }: RocketDataProps) 
     },
     {
       label: '커넥트핀',
-      value: telemetry.connect % 10 === 1 ? '해제됨' : '연결됨',
-      icon: Pin, // Droplet 아이콘 사용
-      color: telemetry.connect % 10 === 1 ? 'text-blue-400' : 'text-red-400',
+      value: telemetry.connectPin ? '연결됨' : '해제됨',
+      icon: Pin,
+      color: telemetry.connectPin ? 'text-blue-400' : 'text-red-400',
     },
     {
       label: '낙하산',
-      value: telemetry.parachuteStatus > 0 ? '사출됨' : '미사출',
+      value: telemetry.parachute ? '사출됨' : '미사출',
       icon: Cloud,
-      color: telemetry.parachuteStatus > 0 ? 'text-green-400' : 'text-red-400',
-      subValue: telemetry.parachuteStatus > 0
+      color: telemetry.parachute ? 'text-green-400' : 'text-red-400',
+      subValue: telemetry.parachute
         ? (['알 수 없음', '비상사출', '고도하강', '시간지연'][telemetry.parachuteEjectReason] ?? '알 수 없음')
         : null,
     },
@@ -142,7 +142,7 @@ export default function RocketData({ telemetry, rollHistory }: RocketDataProps) 
           </div>
           <div className="flex items-center justify-between">
             <span className="text-gray-400">위성 수</span>
-            <span className="font-mono text-red-400">{Math.floor(telemetry.connect/10)}개</span>
+            <span className="font-mono text-red-400">{telemetry.sats}개</span>
           </div>
         </div>
       </div>

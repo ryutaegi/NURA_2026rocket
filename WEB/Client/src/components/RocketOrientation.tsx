@@ -14,7 +14,7 @@ export default function RocketOrientation({ telemetry }: RocketOrientationProps)
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const rocketRef = useRef<THREE.Group | null>(null);
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -139,16 +139,12 @@ export default function RocketOrientation({ telemetry }: RocketOrientationProps)
     };
   }, []);
 
-  // 로켓 회전 업데이트
+  // 로켓 회전 업데이트 (쿼터니안 직접 적용)
   useEffect(() => {
     if (rocketRef.current) {
-      rocketRef.current.rotation.order = 'ZYX';
-      // Pitch (X축), Roll (Z축), Yaw (Y축)
-      rocketRef.current.rotation.x = -(telemetry.pitch * Math.PI) / 180;
-      rocketRef.current.rotation.z = (telemetry.roll * Math.PI) / 180;
-      rocketRef.current.rotation.y = -(telemetry.yaw * Math.PI) / 180;
+      rocketRef.current.quaternion.set(telemetry.q1, telemetry.q2, telemetry.q3, telemetry.q0);
     }
-  }, [telemetry.pitch, telemetry.roll, telemetry.yaw]);
+  }, [telemetry.q0, telemetry.q1, telemetry.q2, telemetry.q3]);
 
   return (
     <div className="relative w-full h-full">
@@ -157,18 +153,26 @@ export default function RocketOrientation({ telemetry }: RocketOrientationProps)
       {/* 정보 오버레이 */}
       <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-sm text-white px-4 py-3 rounded-lg space-y-1">
         <div className="text-xs text-gray-400 mb-2">로켓 자세 (Three.js)</div>
-        <div className="grid grid-cols-3 gap-4 text-sm">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
           <div>
             <div className="text-xs text-gray-400">Roll</div>
             <div className="text-blue-400">{telemetry.roll.toFixed(1)}°</div>
           </div>
           <div>
-            <div className="text-xs text-gray-400">Pitch</div>
-            <div className="text-red-400">{telemetry.pitch.toFixed(1)}°</div>
+            <div className="text-xs text-gray-400">q0 (w)</div>
+            <div className="text-yellow-400">{telemetry.q0.toFixed(3)}</div>
           </div>
           <div>
-            <div className="text-xs text-gray-400">Yaw</div>
-            <div className="text-green-400">{telemetry.yaw.toFixed(1)}°</div>
+            <div className="text-xs text-gray-400">q1 (x)</div>
+            <div className="text-red-400">{telemetry.q1.toFixed(3)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-400">q2 (y)</div>
+            <div className="text-green-400">{telemetry.q2.toFixed(3)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-400">q3 (z)</div>
+            <div className="text-purple-400">{telemetry.q3.toFixed(3)}</div>
           </div>
         </div>
       </div>

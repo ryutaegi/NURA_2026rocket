@@ -12,22 +12,39 @@ import { db } from '../lib/firebase';
 import { collection, addDoc, doc, setDoc, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
 
 export interface RocketTelemetry {
-  latitude: number;
-  longitude: number;
-  altitude: number;
-  speed: number;
-  pitch: number;
-  roll: number;
-  yaw: number;
-  // stage는 이제 flightPhase 값에 따라 결정
+  // GPS
+  latitude: number;   // lat / 1e7
+  longitude: number;  // lon / 1e7
+  altitude: number;   // alt (0~255m)
+
+  // 쿼터니안 (Q15 디코딩 후 float)
+  q0: number;
+  q1: number;
+  q2: number;
+  q3: number;
+
+  // 자세
+  roll: number;   // 0~255 → -127~128°
+
+  // 환경
+  temperature: number;  // temp - 20 (-20~100°C)
+
+  // flag1
+  sats: number;         // 위성 개수 (bits 3:0)
+  soundBtn: boolean;    // 소리버튼 (bit 4)
+  ejectBtn: boolean;    // 사출버튼 (bit 5)
+  parachute: boolean;   // 낙하산사출 (bit 6)
+  connectPin: boolean;  // 커넥트핀 (bit 7)
+
+  // flag2
+  flightPhase: number;      // 발사단계 (bits 7:5)
+  ejectEmergency: boolean;  // 비상사출 (bit 4)
+  ejectDescent: boolean;    // 고도하강사출 (bit 3)
+  ejectTimer: boolean;      // 시간지연사출 (bit 2)
+
+  // derived
   stage: 'pre-launch' | 'launch' | 'powered' | 'coasting' | 'apogee' | 'descent' | 'landed';
-  temperature: number;
-  pressure: number;
-  battery: number;
-  connect: number; // 새로 추가
-  parachuteStatus: number; // 새로 추가 (0: 닫힘, 1: 열림)
-  parachuteEjectReason: number; // 0: 알 수 없음, 1: 비상사출, 2: 고도하강, 3: 시간지연
-  flightPhase: number; // 새로 추가 (0: STANDBY, 1: LAUNCHED, ...)
+  parachuteEjectReason: number; // 0: 없음, 1: 비상, 2: 고도, 3: 타이머
 }
 
 // 아두이노 FlightState enum에 따른 매핑
@@ -57,18 +74,20 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
     latitude: 37.5665,
     longitude: 126.9780,
     altitude: 0,
-    speed: 0,
-    pitch: 0,
+    q0: 1, q1: 0, q2: 0, q3: 0,
     roll: 0,
-    yaw: 0,
-    stage: 'pre-launch', // 초기값
     temperature: 0,
-    pressure: 0,
-    battery: 0,
-    connect: 0, // 초기값
-    parachuteStatus: 0, // 초기값
-    parachuteEjectReason: 0, // 초기값
-    flightPhase: 0, // 초기값
+    sats: 0,
+    soundBtn: false,
+    ejectBtn: false,
+    parachute: false,
+    connectPin: false,
+    flightPhase: 0,
+    ejectEmergency: false,
+    ejectDescent: false,
+    ejectTimer: false,
+    stage: 'pre-launch',
+    parachuteEjectReason: 0,
   });
 
   const [isRecording, setIsRecording] = useState(false);
@@ -224,43 +243,65 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
 
     if (lastMessage.type === 'telemetry') {
       const data = lastMessage.data;
+      console.log('[telemetry raw]', data);
 
-      if (data.parachuteStatus == 2) {
+      // 쿼터니안 Q15 디코딩
+      const q1 = data.q1 / 32767.0;
+      const q2 = data.q2 / 32767.0;
+      const q3 = data.q3 / 32767.0;
+      const q0 = Math.sqrt(Math.max(0, 1 - q1 ** 2 - q2 ** 2 - q3 ** 2));
+
+      // flag1 파싱
+      const sats       = data.flag1 & 0x0F;
+      const soundBtn   = Boolean((data.flag1 >> 4) & 0x01);
+      const ejectBtn   = Boolean((data.flag1 >> 5) & 0x01);
+      const parachute  = Boolean((data.flag1 >> 6) & 0x01);
+      const connectPin = Boolean((data.flag1 >> 7) & 0x01);
+
+      // flag2 파싱
+      const flightPhase    = (data.flag2 >> 5) & 0x07;
+      const ejectEmergency = Boolean((data.flag2 >> 4) & 0x01);
+      const ejectDescent   = Boolean((data.flag2 >> 3) & 0x01);
+      const ejectTimer     = Boolean((data.flag2 >> 2) & 0x01);
+
+      // 낙하산 사출 이유
+      const parachuteEjectReason = ejectEmergency ? 1 : ejectDescent ? 2 : ejectTimer ? 3 : 0;
+
+      // roll 스케일링 (0~255 → -127~128°)
+      const roll = data.roll - 127;
+
+      // 이벤트 처리
+      if (ejectEmergency && parachute) {
         playSound("/sounds/ssagal.mp3");
-        toast.success(data.message || '비상 사출 명령을 성공적으로 전송했습니다.');
+        toast.success('비상 사출이 감지되었습니다.');
       }
-
-      if (data.connect % 10 == 3) { //커넥트핀 해제
-        toast.success(data.message || "카운트다운이 시작되었습니다.");
+      if (soundBtn) {
         playSound("/sounds/count.mp3");
-        data.connect = Math.floor(data.connect / 10) * 10 + 1;
-      }
-
-      if (data.connect % 10 == 2) { //커넥트핀 연결
-        toast.success(data.message || "카운트다운이 시작되었습니다.");
-        playSound("/sounds/count.mp3");
-        data.connect = Math.floor(data.connect / 10) * 10 + 0;
+        toast.success("카운트다운이 시작되었습니다.");
       }
 
       setTelemetry({
-        latitude: data.latitude,
-        longitude: data.longitude,
-        altitude: data.altitude,
-        speed: data.speed,
-        pitch: data.pitch,
-        roll: data.roll,
-        yaw: data.yaw,
-        stage: flightPhaseToStageMap[data.flightPhase] || 'pre-launch',
-        temperature: data.temperature,
-        pressure: data.pressure,
-        battery: data.battery,
-        connect: data.connect,
-        parachuteStatus: data.parachuteStatus,
-        parachuteEjectReason: data.parachuteEjectReason ?? 0,
-        flightPhase: data.flightPhase,
+        latitude: data.lat / 1e7,
+        longitude: data.lon / 1e7,
+        altitude: data.alt,
+        q0, q1, q2, q3,
+        roll,
+        temperature: data.temp - 20,
+        sats,
+        soundBtn,
+        ejectBtn,
+        parachute,
+        connectPin,
+        flightPhase,
+        ejectEmergency,
+        ejectDescent,
+        ejectTimer,
+        stage: flightPhaseToStageMap[flightPhase] || 'pre-launch',
+        parachuteEjectReason,
       });
+   
 
-      const newEntry = { t: Date.now(), roll: data.roll };
+      const newEntry = { t: Date.now(), roll };
       const updated = [...rollHistoryRef.current, newEntry].slice(-ROLL_HISTORY_MAX);
       rollHistoryRef.current = updated;
       setRollHistory(updated);
@@ -344,18 +385,23 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
       latitude: currentData.latitude,
       longitude: currentData.longitude,
       altitude: currentData.altitude,
-      speed: currentData.speed,
-      pitch: currentData.pitch,
-      roll: currentData.roll,
-      yaw: currentData.yaw,
-      stage: flightPhaseToStageMap[currentData.flightPhase] || 'pre-launch',
+      q0: currentData.q0 ?? 1,
+      q1: currentData.q1 ?? 0,
+      q2: currentData.q2 ?? 0,
+      q3: currentData.q3 ?? 0,
+      roll: currentData.roll ?? 0,
       temperature: currentData.temperature,
-      pressure: currentData.pressure,
-      battery: currentData.battery,
-      connect: currentData.connect,
-      parachuteStatus: currentData.parachuteStatus,
+      sats: currentData.sats ?? 0,
+      soundBtn: currentData.soundBtn ?? false,
+      ejectBtn: currentData.ejectBtn ?? false,
+      parachute: currentData.parachute ?? false,
+      connectPin: currentData.connectPin ?? false,
+      flightPhase: currentData.flightPhase ?? 0,
+      ejectEmergency: currentData.ejectEmergency ?? false,
+      ejectDescent: currentData.ejectDescent ?? false,
+      ejectTimer: currentData.ejectTimer ?? false,
+      stage: flightPhaseToStageMap[currentData.flightPhase] || 'pre-launch',
       parachuteEjectReason: currentData.parachuteEjectReason ?? 0,
-      flightPhase: currentData.flightPhase,
     });
   }, [isReplayMode, replayTime, replayData]);
 
@@ -389,18 +435,20 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
       latitude: 37.5665,
       longitude: 126.9780,
       altitude: 0,
-      speed: 0,
-      pitch: 0,
+      q0: 1, q1: 0, q2: 0, q3: 0,
       roll: 0,
-      yaw: 0,
-      stage: 'pre-launch',
-      temperature: 22,
-      pressure: 1013,
-      battery: 100,
-      connect: 0,
-      parachuteStatus: 0,
-      parachuteEjectReason: 0,
+      temperature: 0,
+      sats: 0,
+      soundBtn: false,
+      ejectBtn: false,
+      parachute: false,
+      connectPin: false,
       flightPhase: 0,
+      ejectEmergency: false,
+      ejectDescent: false,
+      ejectTimer: false,
+      stage: 'pre-launch',
+      parachuteEjectReason: 0,
     });
   };
 

@@ -170,34 +170,30 @@ let recordedData = [];
 
 // 시리얼 포트 설정 (아두이노 연결)
 // COM 포트는 환경에 맞게 수정 필요 (예: Windows - 'COM3', macOS/Linux - '/dev/tty.usbserial-XXXX')
-const SERIAL_PORT = '/dev/tty.usbserial-130'; // 실제 포트로 변경하세요
+const SERIAL_PORT = '/dev/tty.usbserial-110'; // 실제 포트로 변경하세요
 const BAUD_RATE = 115200; // 아두이노와 동일하게 설정
 
 let serialPort;
 
 let rxBuffer = Buffer.alloc(0);
-const EXPECTED_PACKET_LEN = 44;
+const EXPECTED_PACKET_LEN = 21;
 const SYNC_BYTE = 0xAA;
 
 
-// 시뮬레이션 데이터 생성 함수 (프론트엔드 형식에 맞춤)
+// 시뮬레이션 데이터 생성 함수 (groundMain 패킷 필드명 기준)
 const createTestData = () => {
   return {
     timestamp: Date.now(),
-    latitude: 37.5665 + (Math.random() - 0.5) * 0.01,
-    longitude: 126.9780 + (Math.random() - 0.5) * 0.01,
-    altitude: Math.random() * 1000,
-    speed: Math.random() * 150,
-    pitch: Math.random() * 360 - 180,
-    roll: Math.random() * 360 - 180,
-    yaw: Math.random() * 360,
-    temperature: 20 + Math.random() * 10,
-    pressure: 1013 + (Math.random() - 0.5) * 20,
-    battery: 100 - Math.random() * 100,
-    connect: Math.floor(Math.random() * 2),
-    parachuteStatus: Math.floor(Math.random() * 2),
-    parachuteEjectReason: 0, // 0: 알 수 없음, 1: 비상사출, 2: 고도하강, 3: 시간지연
-    flightPhase: Math.floor(Math.random() * 7),
+    q1: Math.floor(Math.random() * 65535 - 32768),
+    q2: Math.floor(Math.random() * 65535 - 32768),
+    q3: Math.floor(Math.random() * 65535 - 32768),
+    lat: Math.floor((37.5665 + (Math.random() - 0.5) * 0.01) * 1e7),
+    lon: Math.floor((126.9780 + (Math.random() - 0.5) * 0.01) * 1e7),
+    alt: Math.floor(Math.random() * 255),
+    temp: Math.floor(20 + Math.random() * 10 + 20), // +20 오프셋 적용
+    flag1: Math.floor(Math.random() * 256),
+    flag2: Math.floor(Math.random() * 256),
+    roll: Math.floor(Math.random() * 256),
   };
 };
 
@@ -262,7 +258,7 @@ try {
       const packet = rxBuffer.slice(0, EXPECTED_PACKET_LEN);
       rxBuffer = rxBuffer.slice(EXPECTED_PACKET_LEN);
 
-      // 체크섬 검증
+      // 체크섬 검증 (bytes[1] ~ bytes[19] 합산, bytes[20]과 비교)
       let checksum = 0;
       for (let i = 1; i < EXPECTED_PACKET_LEN - 1; i++) {
         checksum = (checksum + packet[i]) & 0xFF;
@@ -274,24 +270,27 @@ try {
       }
 
       try {
+        // groundMain FlightDataPacket 구조체 필드명 그대로 사용
         const telemetryData = {
           timestamp: Date.now(),
 
-          roll: packet.readFloatLE(1),
-          pitch: packet.readFloatLE(5),
-          yaw: packet.readFloatLE(9),
-          latitude: packet.readFloatLE(13),
-          longitude: packet.readFloatLE(17),
-          altitude: packet.readFloatLE(21),
-          temperature: packet.readFloatLE(25),
-          connect: packet.readFloatLE(29),
-          speed: packet.readFloatLE(33),
-          pressure: packet.readFloatLE(37),
-          parachuteStatus: packet.readUInt8(41),
-          flightPhase: packet.readUInt8(42),
-          battery: 100, // 임시
+          q1:    packet.readInt16LE(1),   // bytes 1-2
+          q2:    packet.readInt16LE(3),   // bytes 3-4
+          q3:    packet.readInt16LE(5),   // bytes 5-6
+          lat:   packet.readInt32LE(7),   // bytes 7-10
+          lon:   packet.readInt32LE(11),  // bytes 11-14
+          alt:   packet.readUInt8(15),    // byte 15
+          temp:  packet.readUInt8(16),    // byte 16
+          flag1: packet.readUInt8(17),    // byte 17
+          flag2: packet.readUInt8(18),    // byte 18
+          roll:  packet.readUInt8(19),    // byte 19
         };
 
+        console.log('[telemetry]', {
+          ...telemetryData,
+          flag1: '0b' + telemetryData.flag1.toString(2).padStart(8, '0'),
+          flag2: '0b' + telemetryData.flag2.toString(2).padStart(8, '0'),
+        });
         broadcastData(telemetryData);
 
       } catch (e) {
