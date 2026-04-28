@@ -159,21 +159,21 @@ void handleLoraRx() {
 
   // connect (기존 포맷 유지: 위성개수*10 + 커넥트핀, 소리클릭시 +2/+3)
   if (sound == true) {
-    packet.flag1 |= 0x20; //3번비트 1로 설정
+    packet.flag1 |= 0x10; //3번비트 1로 설정
     sound = false;
   } else {
-    packet.flag1 &= ~0x20; //3번 비트 0으로 설정 
+    packet.flag1 &= ~0x10; //3번 비트 0으로 설정 
   }
 
  
 
-  // para: 비상사출 버튼 클릭시 2, 아니면 패킷의 낙하산사출 비트
-  if (ejection == true) {
-    packet.flag1 |= 0x40; //2번비트 1로 설정
-    ejection = false;
-  } else {
-    packet.flag1 &= ~0x40; // 2번비트 0으로 설정
-  }
+ 
+  // if (ejection == true) {
+  //   packet.flag1 |= 0x40; //2번비트 1로 설정
+  //   ejection = false;
+  // } else {
+  //   packet.flag1 &= ~0x40; // 2번비트 0으로 설정
+  // }
 
   // 바이트 19: roll값 (0~255 → -180~+180, 로켓 좌표계)
   packet.roll = raw[idx++];
@@ -186,6 +186,15 @@ void handleLoraRx() {
     packet.checksum += bytes[i];
   }
 
+// for(int i = 7; i >= 0; i--) {
+//     Serial.print(bitRead(packet.flag1, i));
+// }
+
+// Serial.println("a");
+// for(int i = 7; i >= 0; i--) {
+//     Serial.print(bitRead(packet.flag2, i));
+// }
+// Serial.println("b");
   Serial.write((uint8_t*)&packet, sizeof(packet));
 }
 
