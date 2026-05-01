@@ -159,10 +159,10 @@ void handleLoraRx() {
 
   // connect (기존 포맷 유지: 위성개수*10 + 커넥트핀, 소리클릭시 +2/+3)
   if (sound == true) {
-    packet.flag1 |= 0x10; //3번비트 1로 설정
+    packet.flag1 |= 0x08; //3번비트 1로 설정
     sound = false;
   } else {
-    packet.flag1 &= ~0x10; //3번 비트 0으로 설정 
+    packet.flag1 &= ~0x08; //3번 비트 0으로 설정 
   }
 
  
@@ -186,16 +186,13 @@ void handleLoraRx() {
     packet.checksum += bytes[i];
   }
 
-// for(int i = 7; i >= 0; i--) {
-//     Serial.print(bitRead(packet.flag1, i));
-// }
+ for(int i = 7; i >= 0; i--) {
+     Serial.print(bitRead(packet.flag1, i));
+ }
+Serial.println(" <- flag1");
 
-// Serial.println("a");
-// for(int i = 7; i >= 0; i--) {
-//     Serial.print(bitRead(packet.flag2, i));
-// }
-// Serial.println("b");
-  Serial.write((uint8_t*)&packet, sizeof(packet));
+for (int i = 7; i >= 0; i--) Serial.print(bitRead(packet.flag2, i));
+Serial.println(" <- flag2");
 }
 
 // =======================

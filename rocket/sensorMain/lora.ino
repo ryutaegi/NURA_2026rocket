@@ -176,7 +176,7 @@ buf[idx++] =
     ((chuteByTimer     ? 1 : 0) << 2) |
     (qIndex & 0x03);
 
-buf[idx++] = encodeRoll8(filterRoll);
+buf[idx++] = encodeRoll8(f.filterRoll);
 
 if (idx != 20) {
   Serial.print("LoRa packet size error: ");
