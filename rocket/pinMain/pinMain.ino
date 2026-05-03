@@ -19,7 +19,11 @@ static float yaw_lowpass = 0.0f;
 static float drift_estimate = 0.0f;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
 static uint32_t stable_count = 0;
 static uint32_t last_stable_time = 0;
-
+  static float prevErrorYaw = 0.0f;
+  static unsigned long prevTimePD = 0;
+float vel_x = 0.0f;
+float vel_y = 0.0f;
+float vel_z = 0.0f;
 // [Spike Filter 변수]
 static int      spikeCounter = 0;
 static const int MAX_SPIKE_COUNT = 4; // n회 이상 튀면 FLT_MAX 처리
@@ -40,7 +44,8 @@ static const uint16_t SERVO_MAX_US = 2500;
 
 static const float   SERVO_NEUTRAL_DEG1 = 74.0f;  //흰
 static const float   SERVO_NEUTRAL_DEG2 = 83.5f;  //검
-
+static float servoDeg1 = SERVO_NEUTRAL_DEG1; 
+static float servoDeg2 = SERVO_NEUTRAL_DEG2;
 // [설정] 서보 물리적 제한 각도
 static const float    MAX_SERVO_LIMIT = 24.4f; 
 
@@ -128,10 +133,10 @@ void sendAtoB() {
   push_i16_le(buf, idx, s16_scale(flightData.imu.gz, 10.0f));
 
   // angles: deg * 100
-  push_i16_le(buf, idx, s16_scale(flightData.roll,       100.0f));
+  push_i16_le(buf, idx, s16_scale(flightData.roll,       32767.0f));
   push_i16_le(buf, idx, s16_scale(flightData.filterRoll, 100.0f));
-  push_i16_le(buf, idx, s16_scale(flightData.pitch,      100.0f));
-  push_i16_le(buf, idx, s16_scale(flightData.yaw,        100.0f));
+  push_i16_le(buf, idx, s16_scale(flightData.pitch,      32767.0f));
+  push_i16_le(buf, idx, s16_scale(flightData.yaw,        32767.0f));
 
   // CRC over [VER..PAYLOAD]
   uint16_t crc = crc16_ccitt(&buf[2], (size_t)(idx - 2));
@@ -277,6 +282,8 @@ void loop() {
     
   }
 
+
+
   // 타임아웃 감지 (선이 뽑힘)
   // 500ms 동안 데이터가 안 들어오면 연결끊김으로 판단
   if (millis() - lastImuDataMs > 500) {
@@ -368,65 +375,133 @@ void loop() {
 
     static float last_yaw_deg = 0.0f;
 
-  
+
     // =================  롤 제어 =================
+  unsigned long currentTime = micros();
+  float dt = (currentTime - prevTimePD) / 1000000.0f;
+  prevTimePD = currentTime;
 
+// [변수 선언부 업데이트]
+const float GRAVITY = 9.80665f; 
+const float VEL_DAMPING_MOVING = 0.9995f; // 움직임 중: 거의 1.0에 가깝게 유지 (물리값 보존)
+const float VEL_DAMPING_STILL = 0.85f;    // 정지 중: 빠르게 드리프트 제거
+const float STATIONARY_THRESHOLD = 0.25f; // 정지 판단 임계값 (노이즈 수준에 따라 조정)
 
-    // yaw를 -360~360으로
-  float yaw_deg = wrap720_deg(flightData.filterRoll);  // 0~720
-  if (yaw_deg > 360.0f) yaw_deg -= 720.0f;  // -360~360 변환
-  
-  float diff = yaw_deg - prev_yaw;
-  if (diff > 180.0f) yaw_deg -= 360.0f;    // 179° → -179°일 때 -181° → 181°로
-  else if (diff < -180.0f) yaw_deg += 360.0f;  // 반대 경우 +360°
+// ... loop() 내부 ...
 
-  prev_yaw = yaw_deg; 
+// 1. 순수 선가속도 추출 (중력 보정)
+float pure_ax = ax_f; 
+float pure_ay = ay_f;
+float pure_az = az_f - GRAVITY; // Z축 중력 제거
 
- float servoOffset;
- if (yaw_deg <= 0.0f) {
-    // -180 ~ 0 → -10 ~ 0
-    float servoOffset = fmap(yaw_deg, -360.0f, 0.0f, -MAX_SERVO_LIMIT, 0.0f);
+// 2. 가속도 벡터 크기 계산 (정지 판별용)
+float accel_mag = sqrt(pure_ax * pure_ax + pure_ay * pure_ay + pure_az * pure_az);
+
+// 3. 조건부 속도 적분 및 적응형 댐핑
+if (accel_mag < STATIONARY_THRESHOLD) {
+    // [정지 상태] 가속도가 작으면 센서 드리프트로 간주하고 속도를 0으로 강제 수렴
+    vel_x *= VEL_DAMPING_STILL; 
+    vel_y *= VEL_DAMPING_STILL;
+    vel_z *= VEL_DAMPING_STILL;
     
-  } else {
-    // 0 ~ 180 → 0 ~ +10
-    float servoOffset = fmap(yaw_deg, 0.0f, 360.0f, 0.0f, MAX_SERVO_LIMIT);
- 
-  }
-  
-  // 최종 서보 각도 계산 및 클램프
-  float servoDeg1 = SERVO_NEUTRAL_DEG1 + servoOffset;
-  float servoDeg2 = SERVO_NEUTRAL_DEG2 + servoOffset;
-  
-  
-  // 안전 범위 제한 
-  servoDeg1 = constrain(servoDeg1, SERVO_NEUTRAL_DEG1 - MAX_SERVO_LIMIT, SERVO_NEUTRAL_DEG1 + MAX_SERVO_LIMIT);
-  servoDeg2 = constrain(servoDeg2, SERVO_NEUTRAL_DEG2 - MAX_SERVO_LIMIT, SERVO_NEUTRAL_DEG2 + MAX_SERVO_LIMIT);
-  
+    // 임계값 이하 시 완전 정지
+    if (abs(vel_x) < 0.005f) vel_x = 0.0f;
+    if (abs(vel_y) < 0.005f) vel_y = 0.0f;
+    if (abs(vel_z) < 0.005f) vel_z = 0.0f;
+} 
+else {
+    // [이동 상태] 실제 가속도가 감지되면 댐핑을 거의 하지 않고 물리값에 가깝게 적분
+    vel_x += pure_ax * dt;
+    vel_y += pure_ay * dt;
+    vel_z += pure_az * dt;
+    
+    // 수치적 발산만 간신히 막는 수준의 초약세 댐핑
+    vel_x *= VEL_DAMPING_MOVING;
+    vel_y *= VEL_DAMPING_MOVING;
+    vel_z *= VEL_DAMPING_MOVING;
+}
 
-  // 서보 출력
-  writeServoDeg(MOTOR_CH1, servoDeg1);
-  writeServoDeg(MOTOR_CH2, servoDeg2);
+// 4. 속도 결과 필터링 (필요 시 추가적인 LPF 적용 가능)
+float total_speed = sqrt(vel_x * vel_x + vel_y * vel_y + vel_z * vel_z);
+
+
+if (dt > 0.0f) {
+    // -----------------------------------------------------------------
+    // 1. 센서 각도 랩핑(Wrapping) 및 180도 경계선 스파이크 방지
+    // -----------------------------------------------------------------
+    float yaw_deg = wrap720_deg(flightData.filterRoll);  // 0~720
+    if (yaw_deg > 360.0f) yaw_deg -= 720.0f;  // -360~360 변환
+    
+    // 이전 각도와의 차이를 비교하여 180도 / -180도 경계선 점프 현상 보정
+    float diff = yaw_deg - prev_yaw;
+    if (diff > 180.0f) yaw_deg -= 360.0f;        // 179° → -179°로 튈 때 부드럽게 이어줌
+    else if (diff < -180.0f) yaw_deg += 360.0f;  // 반대 경우 보정
+
+    prev_yaw = yaw_deg; // 다음 루프를 위해 저장
+
+    // -----------------------------------------------------------------
+    // 2. 동적 게인(Gain Scheduling) 기반 PD 제어 로직
+    // -----------------------------------------------------------------
+    // 2-1. 현재 속도(vel)를 기반으로 동적 Kp, Kd 값 갱신
+    float kp = 0.0f;
+    float kd = 0.0f;
+
+    getKPKD(20.0f, kp, kd); // currentVelocity는 외부에서 갱신된 현재 속도
+
+    // 2-2. 수직 비행을 위한 목표 각도 (0도)
+    float targetYaw = 0.0f;
+
+    // 2-3. 현재 각도와의 오차(Error) 계산
+    // [중요] 필터에서 바로 나온 값이 아닌, 랩핑 처리가 완료된 yaw_deg를 사용합니다.
+    float errorYaw = targetYaw - yaw_deg;       
+
+    // 2-4. 오차의 변화율(Derivative) 계산
+    float dErrorYaw = (errorYaw - prevErrorYaw) / dt;
+
+    // 2-5. PD 제어량 산출 (동일한 동적 kp, kd 적용)
+    float outputYaw = (kp * errorYaw) + (kd * dErrorYaw);
+
+    // -----------------------------------------------------------------
+    // 3. 서보 모터 각도 적용 및 출력
+    // -----------------------------------------------------------------
+    // 서보 모터 각도 적용 (서보 중립 + PD 제어량)
+    // ※ 실제 핀 구조에 따라 outputYaw의 부호(+/-)를 반대로 해야 할 수 있습니다.
+    servoDeg1 = SERVO_NEUTRAL_DEG1 + outputYaw; 
+    servoDeg2 = SERVO_NEUTRAL_DEG2 + outputYaw;
+
+    // 서보 기구부 및 핀 보호를 위한 한계치 제한 (Clamping)
+    servoDeg1 = constrain(servoDeg1, SERVO_NEUTRAL_DEG1 - MAX_SERVO_LIMIT, SERVO_NEUTRAL_DEG1 + MAX_SERVO_LIMIT);
+    servoDeg2 = constrain(servoDeg2, SERVO_NEUTRAL_DEG2 - MAX_SERVO_LIMIT, SERVO_NEUTRAL_DEG2 + MAX_SERVO_LIMIT);
+
+    // 서보 모터 물리적 출력
+    writeServoDeg(MOTOR_CH1, servoDeg1);
+    writeServoDeg(MOTOR_CH2, servoDeg2);
+  
+    // 다음 루프 미분항(D) 연산을 위해 현재 오차 저장
+    prevErrorYaw = errorYaw;
+
+          Serial.print(servoDeg1); Serial.print(F("//"));
+       Serial.print(servoDeg2);  Serial.print(F("//"));
+       Serial.println(total_speed, 2); 
+  }
   
 
 
   // Serial.print("Yaw: "); 
-      //   Serial.print(imuData.ax, 2); Serial.print(F("//"));
-      //  Serial.print(imuData.ay, 2);  Serial.print(F("//"));
-      //  Serial.print(imuData.az, 2); Serial.println(F("//"));
-
+  
 
 //     Serial.print(0.5); Serial.print(",");
 //    Serial.print(-0.5); Serial.print(",");
-   Serial.print(",");
-     Serial.print(flightData.filterRoll, 6);
+  //  Serial.print(",");
+  //    Serial.print(flightData.filterRoll, 6);
 // Serial.print(",");
 //   Serial.print(flightData.pitch, 6);
 // Serial.print(",");
 //   Serial.print(flightData.yaw, 6);
 
   // Serial.println(flightData.filterRoll, 6);
- // Serial.print(" Servo1: "); Serial.print(servoDeg1, 1);
- // Serial.print(" Servo2: "); Serial.println(servoDeg2, 1);
+//  Serial.print(imuData.ax);Serial.print(","); Serial.print(imuData.az);Serial.print(",");
+//  Serial.println(imuData.ay);// Serial.println(servoDeg2, 1);
 
   }
   

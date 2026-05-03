@@ -12,13 +12,17 @@ float diff = 0.0f;
 
 // ======================= 자이로 캘리브레이션 변수 =======================
 static bool gyro_calibrating = false;
-static float gx_bias = 0.5227f, gy_bias = -0.9283f, gz_bias = 0.0500f;
+static float gx_bias = -0.3257f, gy_bias = -0.3807f, gz_bias = 0.5573f;
 static float gx_sum = 0.0f, gy_sum = 0.0f, gz_sum = 0.0f;
-float mag_off_x = -3.6, mag_off_y = 42.00, mag_off_z = -80.85;
+float mag_off_x = 11.65f, mag_off_y = -30.7f, mag_off_z = -86.05f;
 float mag_scale_x = 1, mag_scale_y = 1, mag_scale_z = 1;
 static uint32_t gyro_sample_count = 0;
-const uint32_t GYRO_CAL_SAMPLES = 10000;
-
+const uint32_t GYRO_CAL_SAMPLES = 100;
+// 전역 변수 선언 필요
+//  float diff_q1 = 0.0f, diff_q2 = 0.0f, diff_q3 = 0.0f;
+//  float prev_q1 = 0.0f, prev_q2 = 0.0f, prev_q3 = 0.0f;
+//  float q1_drift_total = 0.0f, q2_drift_total = 0.0f, q3_drift_total = 0.0f;
+// float THRESHOLD_Q1 = 0.01f, THRESHOLD_Q2 = 0.01f, THRESHOLD_Q3 = 0.01f;
 
 // ======================= IMU 설정 =======================
 ICM_20948_I2C myICM;
@@ -114,6 +118,19 @@ static inline float MAG_Y() {
 static inline float MAG_Z() {
   return myICM.magZ();
 }
+void getKPKD(float vel, float& kp, float& kd) {
+  const float V_BASE = 20.0f;
+
+  const float KP_BASE = 2.7958f;
+  const float KD_BASE = 0.3371f;
+
+  if (vel <= 1.0f) {
+    vel = 1.0f;
+  }
+
+  kp = KP_BASE * (V_BASE * V_BASE) / (vel * vel);
+  kd = KD_BASE * (V_BASE * V_BASE) / (vel * vel);
+}
 
 // ======================= 메인 IMU 처리 =======================
 void processIMU() {
@@ -133,6 +150,11 @@ void processIMU() {
   float mx = MAG_X();
   float my = -MAG_Y();
   float mz = -MAG_Z();
+
+const float NOISE_THRESHOLD = deg2rad(15.0f); 
+  if (abs(gx) < NOISE_THRESHOLD) gx = 0.0f;
+  if (abs(gy) < NOISE_THRESHOLD) gy = 0.0f;
+  if (abs(gz) < NOISE_THRESHOLD) gz = 0.0f;
 
   mx = (mx - mag_off_x) * mag_scale_x;
   my = (my - mag_off_y) * mag_scale_y;
@@ -159,13 +181,17 @@ void processIMU() {
   imuData.gz = rad2deg(gz);
 
 
+
+
   mahony6.updateIMU(gx, gy, gz, ax, ay, az, dt);
   mahony6.computeAngles();
   
   sensor_yaw = mahony6.yaw;
- 
 
- // 누적값 계산
+
+  mahony9.update(gx, gy, gz, ax, ay, az, mx, my, mz, dt);
+  mahony9.computeAngles();
+  // 누적값 계산
   unsigned long now = millis();
   if (now - lastMs >= 5) {  // 5ms마다 실행
     lastMs = now;
@@ -174,11 +200,14 @@ void processIMU() {
       diff = 0.0f;  
     }
   prevValue = sensor_yaw;
+
   }
- // 누적값 제거
+ //누적값 제거
   yaw_drift_total = yaw_drift_total + diff;           
   sensor_yaw = sensor_yaw - yaw_drift_total;
   sensor_yaw= wrap360_deg(sensor_yaw);
+
+
 
  // -180~180 변환
   if (sensor_yaw > 180.00f) {
@@ -187,35 +216,30 @@ void processIMU() {
   
   flightData.filterRoll = sensor_yaw;
 
-
-  mahony9.update(gx, gy, gz, ax, ay, az, mx, my, mz, dt);
-  mahony9.computeAngles();
-
-  earth_roll = mahony9.q1;  
-  earth_pitch = mahony9.q2;
-  earth_yaw = mahony9.q3;
+  float earth_roll = mahony9.q1;  
+  float earth_pitch = mahony9.q2;
+  float earth_yaw = mahony9.q3;
 
 
-  flightData.roll = earth_roll;
+  flightData.roll =  earth_roll;
   flightData.pitch = earth_pitch;
   flightData.yaw = earth_yaw;
  
      
-    Serial.print(0.5); Serial.print(",");
-   Serial.print(-0.5); Serial.print(",");
-//   Serial.print(",");
-//      Serial.print(flightData.roll, 4);
+//     Serial.print(0.5); Serial.print(",");
+//    Serial.print(-0.5); Serial.print(",");
+// //   Serial.print(",");
+//      Serial.print(imuData.gx, 4);
 // Serial.print(",");
-//   Serial.print(flightData.pitch, 4);
+//   Serial.print(imuData.gy, 4);
 // Serial.print(",");
-//   Serial.print(flightData.yaw, 4);
-  
-    Serial.print(mahony6.q1, 4);
-Serial.print(",");
-  Serial.print(mahony6.q2, 4);
-Serial.print(",");
-  Serial.print(mahony6.q3, 4);
-   
+//   Serial.println(imuData.gz, 4);
+//     Serial.print(mahony9.q1, 4);
+// Serial.print(",");
+//   Serial.print(mahony9.q2, 4);
+// Serial.print(",");
+//   Serial.print(mahony9.q3, 4);Serial.print(",");
+//     Serial.println( flightData.filterRoll,6); 
 
   //     // ======================= 자이로 바이어스 측정 =======================
   // if (Serial.available() > 0) {
@@ -258,37 +282,37 @@ Serial.print(",");
 
 //마그네토미터 바이어스
 
-// --- [2] 마그네토미터 30초 캘리브레이션 ---
-  // float m_min[3] = {9999, 9999, 9999};
-  // float m_max[3] = {-9999, -9999, -9999};
+// //--- [2] 마그네토미터 30초 캘리브레이션 ---
+//   float m_min[3] = {9999, 9999, 9999};
+//   float m_max[3] = {-9999, -9999, -9999};
   
-  // Serial.println(">>> 30초간 센서를 모든 방향(8자)으로 돌리세요!");
-  // uint32_t start_ms = millis();
+//   Serial.println(">>> 30초간 센서를 모든 방향(8자)으로 돌리세요!");
+//   uint32_t start_ms = millis();
   
-  // while (millis() - start_ms < 30000) {
-  //   // 센서에서 현재 raw 자기장 값을 읽어옴 (변수명 mx, my, mz는 센서 읽기 값)
-  //   // mpu.getMagnetometer(&mx, &my, &mz); 
+//   while (millis() - start_ms < 60000) {
+//     // 센서에서 현재 raw 자기장 값을 읽어옴 (변수명 mx, my, mz는 센서 읽기 값)
+//     // mpu.getMagnetometer(&mx, &my, &mz); 
 
-  //   float m_raw[3] = {mx, my, mz}; 
-  //   for (int i = 0; i < 3; i++) {
-  //     if (m_raw[i] < m_min[i]) m_min[i] = m_raw[i];
-  //     if (m_raw[i] > m_max[i]) m_max[i] = m_raw[i];
-  //   }
-  //   delay(10); // 100Hz 샘플링
-  // }
+//     float m_raw[3] = {mx, my, mz}; 
+//     for (int i = 0; i < 3; i++) {
+//       if (m_raw[i] < m_min[i]) m_min[i] = m_raw[i];
+//       if (m_raw[i] > m_max[i]) m_max[i] = m_raw[i];
+//     }
+//     delay(10); // 100Hz 샘플링
+//   }
 
-  // // 보정값(Hard-Iron & Soft-Iron) 계산
-  // mag_off_x = (m_max[0] + m_min[0]) / 2.0f;
-  // mag_off_y = (m_max[1] + m_min[1]) / 2.0f;
-  // mag_off_z = (m_max[2] + m_min[2]) / 2.0f;
+//   // 보정값(Hard-Iron & Soft-Iron) 계산
+//   mag_off_x = (m_max[0] + m_min[0]) / 2.0f;
+//   mag_off_y = (m_max[1] + m_min[1]) / 2.0f;
+//   mag_off_z = (m_max[2] + m_min[2]) / 2.0f;
 
-  // float avg_delta = ((m_max[0]-m_min[0]) + (m_max[1]-m_min[1]) + (m_max[2]-m_min[2])) / 3.0f;
-  // mag_scale_x = avg_delta / (m_max[0] - m_min[0]);
-  // mag_scale_y = avg_delta / (m_max[1] - m_min[1]);
-  // mag_scale_z = avg_delta / (m_max[2] - m_min[2]);
+//   float avg_delta = ((m_max[0]-m_min[0]) + (m_max[1]-m_min[1]) + (m_max[2]-m_min[2])) / 3.0f;
+//   mag_scale_x = avg_delta / (m_max[0] - m_min[0]);
+//   mag_scale_y = avg_delta / (m_max[1] - m_min[1]);
+//   mag_scale_z = avg_delta / (m_max[2] - m_min[2]);
 
-  // Serial.println(">>> 캘리브레이션 완료!");
-  // Serial.print("Offset: "); Serial.print(mag_off_x); Serial.print(", "); Serial.print(mag_off_y); Serial.print(", "); Serial.println(mag_off_z);
+//   Serial.println(">>> 캘리브레이션 완료!");
+//   Serial.print("Offset: "); Serial.print(mag_off_x); Serial.print(", "); Serial.print(mag_off_y); Serial.print(", "); Serial.println(mag_off_z);
 
   uint32_t nowMs = millis();
   if (nowMs - lastPrint >= PRINT_PERIOD_MS) {

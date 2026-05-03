@@ -18,18 +18,20 @@ float twoKp;          // 2 * proportional gain (Kp)
   float accelNorm; 
   float q0, q1, q2, q3; 
   float integralFBx, integralFBy, integralFBz; 
+  float twoKd; // D 게인
+float last_halfex, last_halfey, last_halfez; // 이전 오차 저장용
   float invSampleFreq;
   float roll, pitch, yaw;
   float grav[3];
   bool anglesComputed = false;
   static float invSqrt(float x);
   void computeAngles();
-  
-
+  void setNoiseThreshold(float threshold);
+  float noiseThreshold;
   //-------------------------------------------------------------------------------------------
  
   Adafruit_Mahony();
-  Adafruit_Mahony(float prop_gain, float int_gain);
+  Adafruit_Mahony(float prop_gain, float int_gain,float der_gain);
   void begin(float sampleFrequency) { invSampleFreq = 1.0f / sampleFrequency; }
 
   void update(float gx, float gy, float gz, float ax, float ay, float az,
