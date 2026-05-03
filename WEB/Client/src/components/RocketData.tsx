@@ -35,7 +35,7 @@ export default function RocketData({ telemetry, rollHistory }: RocketDataProps) 
     },
     {
       label: '커넥트핀',
-      value: telemetry.connectPin ? '연결됨' : '해제됨',
+      value: telemetry.connectPin ? '해제됨' : '연결됨',
       icon: Pin,
       color: telemetry.connectPin ? 'text-blue-400' : 'text-red-400',
     },

@@ -129,12 +129,10 @@ void initLora() {
 
 // ======================= 핵심: FlightData -> LoRa 송신 =======================
 void sendLoraFromFlight(const FlightData& f, bool g_parachuteDeployed, bool pinDetached, bool ejectBtnClicked = false,
-                        bool soundBtnClicked = false,
-                        bool chuteByEmergency = false,
+                        bool extra1 = false,
                         bool chuteByDescent = false,
-                        bool chuteByTimer = false,
-                        uint8_t qIndex = 0,
-                        float filterRoll = 0) {
+                        bool chuteByTimer = false
+                        ) {
   static uint32_t lastMs = 0;
   uint32_t nowMs = millis();
   if (nowMs - lastMs < LORA_PERIOD_MS) return;
@@ -163,7 +161,7 @@ void sendLoraFromFlight(const FlightData& f, bool g_parachuteDeployed, bool pinD
 uint8_t sats = (f.gps.sats > 15) ? 15 : f.gps.sats;
 buf[idx++] =
     ((sats & 0x0F) << 4) |
-    ((soundBtnClicked   ? 1 : 0) << 3) |
+    ((0) << 3) |
     ((ejectBtnClicked   ? 1 : 0) << 2) |
     ((g_parachuteDeployed ? 1 : 0) << 1) |
     ((pinDetached ? 1 : 0) << 0);
@@ -171,10 +169,9 @@ buf[idx++] =
 uint8_t stage = ((uint8_t)f.state > 7) ? 7 : (uint8_t)f.state;
 buf[idx++] =
     ((stage & 0x07) << 5) |
-    ((chuteByEmergency ? 1 : 0) << 4) |
+    ((0) << 4) |
     ((chuteByDescent   ? 1 : 0) << 3) |
-    ((chuteByTimer     ? 1 : 0) << 2) |
-    (qIndex & 0x03);
+    ((chuteByTimer     ? 1 : 0) << 2);
 
 buf[idx++] = encodeRoll8(f.filterRoll);
 
@@ -232,8 +229,12 @@ void handleLoraRxCommand() {
     String data = line.substring(p2 + 1, p3);
 
     if (data == "E") {
-      g_parachuteDeployed = true;
-      deployCtl.state = DEPLOY_PUNCH;
+      if(!g_parachuteDeployed)
+      {
+        g_parachuteDeployed = true;
+        ejectBtnClicked = true;
+        deployCtl.state = DEPLOY_PUNCH;
+      }
       //emergencyDeploy();
       Serial.println("receive EEE");
     }

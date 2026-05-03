@@ -38,7 +38,7 @@ export interface RocketTelemetry {
 
   // flag2
   flightPhase: number;      // 발사단계 (bits 7:5)
-  ejectEmergency: boolean;  // 비상사출 (bit 4)
+  extra1: boolean;  // 예비 (bit 4)
   ejectDescent: boolean;    // 고도하강사출 (bit 3)
   ejectTimer: boolean;      // 시간지연사출 (bit 2)
 
@@ -83,7 +83,7 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
     parachute: false,
     connectPin: false,
     flightPhase: 0,
-    ejectEmergency: false,
+    extra1: false,
     ejectDescent: false,
     ejectTimer: false,
     stage: 'pre-launch',
@@ -251,31 +251,31 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
       const q3 = data.q3 / 32767.0;
       const q0 = Math.sqrt(Math.max(0, 1 - q1 ** 2 - q2 ** 2 - q3 ** 2));
 
-      // flag1 파싱
-      const sats       = data.flag1 & 0x0F;
-      const soundBtn   = Boolean((data.flag1 >> 4) & 0x01);
-      const ejectBtn   = Boolean((data.flag1 >> 5) & 0x01);
-      const parachute  = Boolean((data.flag1 >> 6) & 0x01);
-      const connectPin = Boolean((data.flag1 >> 7) & 0x01);
+      // flag1 파싱 (비트 순서 반대)
+      const connectPin = Boolean(data.flag1 & 0x01);
+      const parachute  = Boolean((data.flag1 >> 1) & 0x01);
+      const ejectBtn   = Boolean((data.flag1 >> 2) & 0x01);
+      const soundBtn   = Boolean((data.flag1 >> 3) & 0x01);
+      const sats       = (data.flag1 >> 4) & 0x0F;
 
-      // flag2 파싱
-      const flightPhase    = (data.flag2 >> 5) & 0x07;
-      const ejectEmergency = Boolean((data.flag2 >> 4) & 0x01);
-      const ejectDescent   = Boolean((data.flag2 >> 3) & 0x01);
-      const ejectTimer     = Boolean((data.flag2 >> 2) & 0x01);
+      // flag2 파싱 (비트 순서 반대)
+      const flightPhase    = data.flag2 & 0x07;
+      const ejectTimer     = Boolean((data.flag2 >> 3) & 0x01);
+      const ejectDescent   = Boolean((data.flag2 >> 4) & 0x01);
+      const extra1 = Boolean((data.flag2 >> 5) & 0x01);
 
       // 낙하산 사출 이유
-      const parachuteEjectReason = ejectEmergency ? 1 : ejectDescent ? 2 : ejectTimer ? 3 : 0;
+      const parachuteEjectReason = ejectBtn ? 1 : ejectDescent ? 2 : ejectTimer ? 3 : 0;
 
       // roll 스케일링 (0~255 → -127~128°)
       const roll = data.roll - 127;
 
-      // 이벤트 처리
-      if (ejectEmergency && parachute) {
+      // 이벤트 처리 (상태 변경 시에만)
+      if (!telemetry.ejectBtn && ejectBtn && parachute) {
         playSound("/sounds/ssagal.mp3");
         toast.success('비상 사출이 감지되었습니다.');
       }
-      if (soundBtn) {
+      if (!telemetry.soundBtn && soundBtn) {
         playSound("/sounds/count.mp3");
         toast.success("카운트다운이 시작되었습니다.");
       }
@@ -293,7 +293,7 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
         parachute,
         connectPin,
         flightPhase,
-        ejectEmergency,
+        extra1,
         ejectDescent,
         ejectTimer,
         stage: flightPhaseToStageMap[flightPhase] || 'pre-launch',
@@ -397,7 +397,7 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
       parachute: currentData.parachute ?? false,
       connectPin: currentData.connectPin ?? false,
       flightPhase: currentData.flightPhase ?? 0,
-      ejectEmergency: currentData.ejectEmergency ?? false,
+      extra1: currentData.extra1 ?? false,
       ejectDescent: currentData.ejectDescent ?? false,
       ejectTimer: currentData.ejectTimer ?? false,
       stage: flightPhaseToStageMap[currentData.flightPhase] || 'pre-launch',
@@ -444,7 +444,7 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
       parachute: false,
       connectPin: false,
       flightPhase: 0,
-      ejectEmergency: false,
+      extra1: false,
       ejectDescent: false,
       ejectTimer: false,
       stage: 'pre-launch',

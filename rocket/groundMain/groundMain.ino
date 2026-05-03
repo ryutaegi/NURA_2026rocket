@@ -186,13 +186,14 @@ void handleLoraRx() {
     packet.checksum += bytes[i];
   }
 
- for(int i = 7; i >= 0; i--) {
-     Serial.print(bitRead(packet.flag1, i));
- }
-Serial.println(" <- flag1");
+//  for(int i = 7; i >= 0; i--) {
+//      Serial.print(bitRead(packet.flag1, i));
+//  }
+// Serial.println(" <- flag1");
 
-for (int i = 7; i >= 0; i--) Serial.print(bitRead(packet.flag2, i));
-Serial.println(" <- flag2");
+// for (int i = 7; i >= 0; i--) Serial.print(bitRead(packet.flag2, i));
+// Serial.println(" <- flag2");
+ Serial.write((uint8_t*)&packet, sizeof(packet));
 }
 
 // =======================
