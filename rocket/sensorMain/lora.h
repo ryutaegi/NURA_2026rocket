@@ -12,12 +12,9 @@ void initLora();
 
 // FlightData를 LoRa로 송신
 void sendLoraFromFlight(const FlightData& f, bool g_parachuteDeployed, bool pinDetached, bool ejectBtnClicked = false,
-                        bool soundBtnClicked = false,
-                        bool chuteByEmergency = false,
+                        bool extra1 = false,
                         bool chuteByDescent = false,
-                        bool chuteByTimer = false,
-                        uint8_t qIndex = 0,
-                        float filterRoll = 0);
+                        bool chuteByTimer = false);
 
 void handleLoraRxCommand();
 

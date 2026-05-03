@@ -140,9 +140,10 @@ export default function RocketOrientation({ telemetry }: RocketOrientationProps)
   }, []);
 
   // 로켓 회전 업데이트 (쿼터니안 직접 적용)
+  // X: q2, Y: q1, Z: -q3, W: q0
   useEffect(() => {
     if (rocketRef.current) {
-      rocketRef.current.quaternion.set(telemetry.q1, telemetry.q2, telemetry.q3, telemetry.q0);
+      rocketRef.current.quaternion.set(telemetry.q1, telemetry.q3, -telemetry.q2, telemetry.q0);
     }
   }, [telemetry.q0, telemetry.q1, telemetry.q2, telemetry.q3]);
 

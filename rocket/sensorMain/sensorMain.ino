@@ -75,12 +75,12 @@ static bool isValidPressure_hPa(float p) {
 
 // 패킷 비트 변수
 bool ejectBtnClicked = false;        // bit2
-bool soundBtnClicked = false;        // bit3
+
 
 uint8_t satCount = flight.gps.sats;       // bit7:4, 0~15
 
 uint8_t launchStage = (uint8_t)flight.state; // bit7:5, 0~7
-bool chuteByEmergency = false;       // bit4
+bool extra1 = false;       // bit4
 bool chuteByDescent = false;         // bit3
 bool chuteByTimer = false;           // bit2
 
@@ -398,11 +398,11 @@ void parseAtoB(Stream& link, FlightData& f, uint32_t nowB_ms) {
             f.imu.gx = gx10 / 10.0f;
             f.imu.gy = gy10 / 10.0f;
             f.imu.gz = gz10 / 10.0f;
-
-            f.roll = roll100 / 100.0f;
+          
+            f.roll = roll100 / 32767.0f;
             f.filterRoll = froll100 / 100.0f;
-            f.pitch = pitch100 / 100.0f;
-            f.yaw = yaw100 / 100.0f;
+            f.pitch = pitch100 / 32767.0f;
+            f.yaw = yaw100 / 32767.0f;
           }
 
           st = WAIT_S1;
@@ -632,7 +632,7 @@ void loop() {
   // // if(Serial.available())
   // // Serial2.write(Serial.read());
 
-   sendLoraFromFlight(flight, g_parachuteDeployed, pinDetached);
+   sendLoraFromFlight(flight, g_parachuteDeployed, pinDetached, ejectBtnClicked, extra1, chuteByDescent, chuteByTimer);
 
   if (!pinDetached) {
     pinDetached = isConnectOrDeteached(PIN_CONNECT_DETECT);
@@ -701,12 +701,17 @@ void loop() {
     if (flightTimeMs >= 10000 && !g_parachuteDeployed) {  // 1,000ms = 1초
       Serial.println("낙하산 사출! - 10초 조건");
       deployCtl.state = DEPLOY_PUNCH;
+      if(!g_parachuteDeployed)
+        chuteByTimer = true;
       g_parachuteDeployed = true;
+      
     }
 
     if(descent)
     {
       deployCtl.state = DEPLOY_PUNCH;
+      if(!g_parachuteDeployed)
+        chuteByDescent = true;
       g_parachuteDeployed = true;
       Serial.println("낙하산 사출! - 고도 하강");
     }
@@ -794,13 +799,13 @@ void loop() {
       Serial.print("ageA_ms=");
       Serial.print(ageA);
       Serial.print(" roll=");
-      Serial.print(flight.roll, 2);
+      Serial.print(flight.roll, 4);
       Serial.print(" fRoll=");
       Serial.print(flight.filterRoll, 2);
       Serial.print(" pitch=");
-      Serial.print(flight.pitch, 2);
+      Serial.print(flight.pitch, 4);
       Serial.print(" yaw=");
-      Serial.print(flight.yaw, 2);
+      Serial.print(flight.yaw, 4);
 
       Serial.print(" | ax=");
       Serial.print(flight.imu.ax, 1);

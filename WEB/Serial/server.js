@@ -274,9 +274,9 @@ try {
         const telemetryData = {
           timestamp: Date.now(),
 
-          q1:    packet.readInt16LE(1),   // bytes 1-2
-          q2:    packet.readInt16LE(3),   // bytes 3-4
-          q3:    packet.readInt16LE(5),   // bytes 5-6
+          q1:    packet.readInt16LE(1),   // bytes 1-2 (Big-Endian)
+          q2:    packet.readInt16LE(3),   // bytes 3-4 (Big-Endian)
+          q3:    packet.readInt16LE(5),   // bytes 5-6 (Big-Endian)
           lat:   packet.readInt32LE(7),   // bytes 7-10
           lon:   packet.readInt32LE(11),  // bytes 11-14
           alt:   packet.readUInt8(15),    // byte 15
