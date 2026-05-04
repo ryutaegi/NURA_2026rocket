@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 enum FlightState : uint8_t {
-  STANDBY, LAUNCHED, POWERED, COASTING, APOGEE, DESCENT, LANDED
+  STANDBY, POWERED, COASTING, APOGEE, DESCENT, LANDED
 };
 
 struct __attribute__((packed)) ImuData { float ax, ay, az; float gx, gy, gz; };

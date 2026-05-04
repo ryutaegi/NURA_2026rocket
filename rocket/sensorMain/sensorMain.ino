@@ -654,41 +654,45 @@ void loop() {
 
   // ========================센서 이상치 판단==========
 
-  bool imuOMG = isOMGimu(flight.imu);
-  bool baroOMG = isOMGbaro(flight.baro);
+  static uint32_t lastJudgeMs = 0;
+  static bool descent = false;
+  if (nowMs - lastJudgeMs >= 100) { 
+    lastJudgeMs = nowMs;
+    bool imuOMG = isOMGimu(flight.imu);
+    bool baroOMG = isOMGbaro(flight.baro);
 
-  // 2) ⛔ 센서 고장 시 APOGEE 강제 전이 (여기!)
-  if ((imuOMG || baroOMG) && flight.state < APOGEE) {
-    flight.state = APOGEE;
-    Serial.println("센서 고장");
+    // 2) ⛔ 센서 고장 시 APOGEE 강제 전이 (여기!)
+    if ((imuOMG || baroOMG) && flight.state < APOGEE) {
+      flight.state = APOGEE;
+      Serial.println("센서 고장");
 
-    // 중요: 하강 판단 누적값 리셋(권장)
-    resetDecisionCounters(jc);
-  }
+      // 중요: 하강 판단 누적값 리셋(권장)
+      resetDecisionCounters(jc);
+    }
 
   //================== 기본 판단 신호====================
 
-  bool accelOver = (!imuOMG) && isAccelOver(flight.imu);
+    bool accelOver = (!imuOMG) && isAccelOver(flight.imu);
 
-  bool altitudeUp = (!baroOMG) && isAltitudeUp(flight.baro);      // 상승 증거
-  bool altitudeDown = (!baroOMG) && isAltitudeDown(flight.baro);  // 하강 증거
-  bool powered = isPowered(accelOver, altitudeUp, jc);
-  bool motorOver = isMotorOver(powered, jc);
-  bool apogee = (flight.state < APOGEE) && altitudeUp;
-  bool descent = (flight.state == APOGEE) && altitudeDown;
-  // ========================
+    bool altitudeUp = (!baroOMG) && isAltitudeUp(flight.baro);      // 상승 증거
+    bool altitudeDown = (!baroOMG) && isAltitudeDown(flight.baro);  // 하강 증거
+    bool powered = isPowered(accelOver, altitudeUp, jc);
+    bool motorOver = isMotorOver(accelOver, jc);
+    bool apogee = isApogee(altitudeUp,jc);
+    descent = (flight.state == APOGEE) && isDescent(altitudeDown, jc);
+    // ========================
 
-  // 4) 상태머신 갱신
+    // 4) 상태머신 갱신
 
-  updateFlightState(
-    flight,
-    launchTimeStarted,
-    powered,
-    motorOver,
-    apogee,
-    descent,
-    jc);
-
+    updateFlightState(
+      flight,
+      launchTimeStarted,
+      powered,
+      motorOver,
+      apogee,
+      descent,
+      jc);
+  }
   /*===================== 낙하산 사출 함수=================
       1. 발사 10초 뒤 낙하산 사출
       2. 하강 30회 시 낙하산 사출(데이터 중복 가능성)

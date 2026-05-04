@@ -36,26 +36,13 @@ bool isAccelOver(const ImuData& imu) {  //제곱값 비교로 바꿈
 
 bool isAltitudeUp(const BaroData& baro) {
   //static int countU = 0;
-  static float prevU = 0;
-
-  if(fabs(prevU - baro.climbRate) > 0.05f && launchTimeStarted) {
-    // Serial.print(flight.baro.climbRate);
-    // Serial.print(" ");
-    // Serial.println(prevU);
-    if(flight.baro.climbRate > 0.2) //상승 시 카운트 +1
-      {jc.countU++;
-      //Serial.println(countU);
-      }
-    else{
-      if(jc.countU > 0) //하락중이면 count가 0이상일 때만 count 1 감소
-      jc.countU-=1;
-    }
-    prevU = flight.baro.climbRate;
-    }
-  if(jc.countU > 50)
-  return true;
-  else
-  return false;
+  // static float prevU = 0;
+  
+  if (baro.climbRate > 0.2) { // climbRate 가 0.2 이면 상승 중인것으로 즉시 반환함.
+    return true;
+  } else {
+    return false;
+  }
 }
 
 // bool isAltitudeUp(const BaroData& baro) {
@@ -79,29 +66,34 @@ bool isAltitudeUp(const BaroData& baro) {
 // }
 
 bool isAltitudeDown(const BaroData& baro) {
-  static float prevD = 0.0f;
+  // static float prevD = 0.0f;
   //static int countD = 0;
 
-  if(fabs(prevD - baro.climbRate) > 0.05f && launchTimeStarted) {
-    if(flight.baro.climbRate < 0.2) //하강 시 카운트 +1
-      jc.countD++;
-    else{
-      if(jc.countD > 0) //하락중이면 count가 0이상일 때만 count 1 감소
-      jc.countD-=1;
-    }
-    prevD = flight.baro.climbRate;
-    }
-  if(jc.countD > 50)
-  return true;
-  else
-  return false;
+  // if(fabs(prevD - baro.climbRate) > 0.05f && launchTimeStarted) {
+  //   if(flight.baro.climbRate < 0.2) //하강 시 카운트 +1
+  //     jc.countD++;
+  //   else{
+  //     if(jc.countD > 0) //하락중이면 count가 0이상일 때만 count 1 감소
+  //     jc.countD-=1;
+  //   }
+  //   prevD = flight.baro.climbRate;
+  //   }
+  // if(jc.countD > 50)
+  // return true;
+  // else
+  // return false;
+  if (baro.climbRate < -0.2) {
+    return true;
+  } else {
+    return false;
+  }
 }
 
 bool isPowered(bool accelOver, bool altitudeUp, JudgeCounters& jc)  //카운터 초기화 기능 추가
 {
   const uint8_t THRESHOLD = 10;  // 10Hz 기준 ≈ 1초
 
-  if (accelOver && altitudeUp) {
+  if (accelOver) {
     if (jc.powered < THRESHOLD) jc.powered++;
   } else {
     jc.powered = 0;
@@ -123,7 +115,40 @@ bool isMotorOver(bool isPoweredNow, JudgeCounters& jc)  //카운터 초기화 �
   return jc.motorOver >= THRESHOLD;
 }
 
+bool isApogee(bool altitudeUp, JudgeCounters& jc) {
+  const uint8_t THRESHOLD = 10; // 임계값 (예: 센서 10Hz 기준 1초 동안 상승하지 않으면 최고점)
 
+  if (!altitudeUp) { 
+    // 상승 중이 아니면(최고점을 찍고 속도가 줄거나 내려오기 시작하면) 카운트 증가
+    if (jc.apogee < THRESHOLD) {
+      jc.apogee++;
+    }
+  } else {
+    // 다시 상승하는 것으로 측정되면 카운트 초기화 (노이즈 튕김 방지)
+    jc.apogee = 0;
+  }
+
+  // 카운트가 꽉 차면 비로소 최고점(APOGEE)으로 최종 판단
+  return jc.apogee >= THRESHOLD;
+}
+
+// 하강(DESCENT) 확정 판단 함수 (노이즈 방지용 카운터)
+bool isDescent(bool altitudeDown, JudgeCounters& jc) {
+  const uint8_t THRESHOLD = 10; // 10Hz 기준 1초 동안 연속으로 하강해야 인정
+
+  if (altitudeDown) { 
+    // 하강 중이면 카운트 증가
+    if (jc.descent < THRESHOLD) {
+      jc.descent++;
+    }
+  } else {
+    // 순간적으로 하강이 아니라고(노이즈 등) 판단되면 카운트 초기화
+    jc.descent = 0;
+  }
+
+  // 카운트가 꽉 차면 비로소 진짜 하강으로 최종 판단
+  return jc.descent >= THRESHOLD;
+}
 
 void initParachuteDeploy()  //서보모터 초기화 함수
 {
@@ -166,31 +191,41 @@ void updateFlightState(FlightData& flight, bool startFlight, bool powered, bool 
 //bool descent,    // altitudeDown OR !accelOver 누적 → 상태
 //JudgeCounters &jc
 {
+  static uint32_t poweredStartTime = 0;
   switch (flight.state) {
 
     case STANDBY:
       if (startFlight) {
-        flight.state = LAUNCHED;
+        flight.state = POWERED;
 
         // 🔴 초기화: 이전 실험/노이즈 완전 제거
         jc = {};  // 모든 카운터 0으로
+        poweredStartTime=flight.timeMs; // POWERED에 진입한 현재 시간 기록
 
-        Serial.println("STANDBY → LAUNCHED");
+        Serial.println("STANDBY → POWERED");
       }
       break;
 
-    case LAUNCHED:
-      if (powered) {
-        flight.state = POWERED;
+    // case LAUNCHED:
+    //   if (powered) {
+    //     flight.state = POWERED;
 
-        // 🔴 추력 시작 시, 추력 종료 카운터 무효화
-        jc.motorOver = 0;
+    //     // 🔴 추력 시작 시, 추력 종료 카운터 무효화
+    //     jc.motorOver = 0;
 
-        Serial.println("LAUNCHED → POWERED");
-      }
-      break;
+    //     Serial.println("LAUNCHED → POWERED");
+    //   }
+    //   break;
 
     case POWERED:
+      if ((flight.timeMs - poweredStartTime) > 4000) {
+        flight.state = APOGEE;
+        jc.descent = 0;
+        jc.countD = 0;
+        Serial.println("POWERED → APOGEE (4초 타임아웃 강제 전이)");
+        break; // 여기서 조건문 탈출
+      }
+
       if (motorOver) {
         flight.state = COASTING;
 
@@ -247,7 +282,6 @@ void updateFlightState(FlightData& flight, bool startFlight, bool powered, bool 
 const char* getStateName(FlightState state) {
   switch (state) {
     case STANDBY: return "STANDBY";
-    case LAUNCHED: return "LAUNCHED";
     case POWERED: return "POWERED";
     case COASTING: return "COASTING";
     case APOGEE: return "APOGEE";
