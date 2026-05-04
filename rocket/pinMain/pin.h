@@ -49,7 +49,10 @@ extern const float W_LPF_K;
 extern float ax_f, ay_f, az_f;
 extern float gx_f, gy_f, gz_f;
 extern float mx_f, my_f, mz_f;
-
+// 속도 저장을 위한 전역 변수 (단위: m/s)
+extern float vel_x;
+extern float vel_y;
+extern float vel_z;
 extern ImuData imuData;
 extern FlightData flightData;
 
@@ -92,4 +95,5 @@ float MAG_Z(void);
 
 void calculateEulerAngles(long q1_raw, long q2_raw, long q3_raw, float& roll, float& pitch, float& yaw);
 
+void getKPKD(float vel, float& kp, float& kd);
 

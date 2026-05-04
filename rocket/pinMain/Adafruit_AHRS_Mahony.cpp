@@ -6,37 +6,43 @@
 #define DEFAULT_SAMPLE_FREQ 200.0f // sample frequency in Hz
 float twoKpDef = (2.0f * 1.5f);     // 2 * proportional gain
 float twoKiDef = (2.0f * 0.23f);     // 2 * integral gain
-
+float twoKdDef = (2.0f * 0.005f); 
 //-------------------------------------------------------------------------------------------
 //업데이트
 
-Adafruit_Mahony::Adafruit_Mahony() : Adafruit_Mahony(twoKpDef, twoKiDef) {}
+Adafruit_Mahony::Adafruit_Mahony() : Adafruit_Mahony(twoKpDef, twoKiDef,twoKdDef) {}
 
-Adafruit_Mahony::Adafruit_Mahony(float prop_gain, float int_gain) {
+Adafruit_Mahony::Adafruit_Mahony(float prop_gain, float int_gain, float der_gain) {
   twoKp = prop_gain; // 2 * proportional gain (Kp)
   twoKi = int_gain;  // 2 * integral gain (Ki)
+  twoKd = der_gain;
   bool isStatic;
   float accelNorm ;
   q0 = 1.0f;
   q1 = 0.0f;
   q2 = 0.0f;
   q3 = 0.0f;
+  last_halfex = last_halfey = last_halfez = 0.0f;
   integralFBx = 0.0f;
   integralFBy = 0.0f;
   integralFBz = 0.0f;
   anglesComputed = false;
   invSampleFreq = 1.0f / DEFAULT_SAMPLE_FREQ;
+
 }
+
 
 void Adafruit_Mahony::update(float gx, float gy, float gz, float ax, float ay,
                              float az, float mx, float my, float mz, float dt) {
+                            
+
   float recipNorm;
   float q0q0, q0q1, q0q2, q0q3, q1q1, q1q2, q1q3, q2q2, q2q3, q3q3;
   float hx, hy, bx, bz;
   float halfvx, halfvy, halfvz, halfwx, halfwy, halfwz;
   float halfex, halfey, halfez;
-  float kp9 = (2.0f * 1.0f);     // 2 * proportional gain
-  float ki9 = (2.0f * 0.001f);  
+  float kp9 = (2.0f * 3.0f);     // 2 * proportional gain
+  float ki9 = (2.0f * 0.3f);  
   // 가속도 벡터의 크기(Norm) 계산
   float accelNorm = sqrtf(ax * ax + ay * ay + az * az);
 
@@ -45,8 +51,8 @@ void Adafruit_Mahony::update(float gx, float gy, float gz, float ax, float ay,
   // 9.8m/s^2 기준이면 단위에 맞춰 임계값을 조절하세요. (여기서는 정규화 전 단위 기준)
   bool isStatic = (accelNorm > 750.0f && accelNorm < 1250.0f); 
 // Serial.print(accelNorm);
-Serial.print(",");
-Serial.println(isStatic);
+// Serial.print(",");
+// Serial.println(isStatic);
   if (isStatic && !((ax == 0.0f) && (ay == 0.0f) && (az == 0.0f))) {
 
     // 가속도 및 지자계 정규화
@@ -81,6 +87,9 @@ Serial.println(isStatic);
     halfey = (az * halfvx - ax * halfvz) + (mz * halfwx - mx * halfwz);
     halfez = (ax * halfvy - ay * halfvx) + (mx * halfwy - my * halfwx);
 
+float derEx = (halfex - last_halfex) / dt;
+    float derEy = (halfey - last_halfey) / dt;
+    float derEz = (halfez - last_halfez) / dt;
     // PI 제어 보정값 적용
     if (twoKi > 0.0f) {
       integralFBx += ki9 * halfex * dt;
@@ -92,6 +101,15 @@ Serial.println(isStatic);
     gy += kp9 * halfey;
     gz += kp9 * halfez;
     
+    // [D항 적용]
+    gx += twoKd * derEx;
+    gy += twoKd * derEy;
+    gz += twoKd * derEz;
+
+    // 현재 오차를 다음 루프를 위해 저장
+    last_halfex = halfex;
+    last_halfey = halfey;
+    last_halfez = halfez;
   } 
   // else: 로켓 가속 중(isStatic == false)일 때는 gx, gy, gz 원본(자이로)만 사용됨
 
@@ -137,7 +155,9 @@ void Adafruit_Mahony::updateIMU(float gx, float gy, float gz, float ax,
     halfex = (ay * halfvz - az * halfvy);
     halfey = (az * halfvx - ax * halfvz);
     halfez = (ax * halfvy - ay * halfvx);
-
+float derEx = (halfex - last_halfex) / dt;
+    float derEy = (halfey - last_halfey) / dt;
+    float derEz = (halfez - last_halfez) / dt;
     if (twoKi > 0.0f) {
       integralFBx += twoKi * halfex * dt;
       integralFBy += twoKi * halfey * dt;
@@ -154,6 +174,15 @@ void Adafruit_Mahony::updateIMU(float gx, float gy, float gz, float ax,
     gx += twoKp * halfex;
     gy += twoKp * halfey;
     gz += twoKp * halfez;
+
+    gx += twoKd * derEx;
+    gy += twoKd * derEy;
+    gz += twoKd * derEz;
+
+    // 데이터 갱신
+    last_halfex = halfex;
+    last_halfey = halfey;
+    last_halfez = halfez;
   }
 
   gx *= (0.5f * dt); 
