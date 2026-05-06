@@ -144,8 +144,109 @@ def run_optimization(n_trials: int = 50) -> dict:
 # ─────────────────────────────────────────
 # 단독 실행 테스트
 # ─────────────────────────────────────────
+def visualize_3d_optimization_surface(study):
+    """
+    최적화 과정을 3D 표면 그래프로 시각화
+
+    X축: Kp_base, Y축: Kd_base, Z축: Score J
+    """
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
+    from scipy.interpolate import griddata
+
+    trials = study.trials
+    kp_vals = []
+    kd_vals = []
+    j_vals  = []
+
+    for t in trials:
+        if t.value is not None:
+            kp_vals.append(t.params.get("Kp_base"))
+            kd_vals.append(t.params.get("Kd_base"))
+            j_vals.append(t.value)
+
+    kp_vals = np.array(kp_vals)
+    kd_vals = np.array(kd_vals)
+    j_vals  = np.array(j_vals)
+
+    # 그리드 생성
+    kp_grid = np.linspace(kp_vals.min() - 0.2, kp_vals.max() + 0.2, 50)
+    kd_grid = np.linspace(kd_vals.min() - 0.2, kd_vals.max() + 0.2, 50)
+    KP, KD = np.meshgrid(kp_grid, kd_grid)
+
+    # Interpolation으로 표면 생성
+    J = griddata(
+        (kp_vals, kd_vals), j_vals,
+        (KP, KD),
+        method='cubic'
+    )
+
+    # 3D 플롯
+    fig = plt.figure(figsize=(14, 5))
+
+    # ── 서브플롯 1: 3D 표면 ──
+    ax1 = fig.add_subplot(121, projection='3d')
+    surf = ax1.plot_surface(KP, KD, J, cmap='viridis', alpha=0.8, edgecolor='none')
+
+    # Trial 점들 표시
+    ax1.scatter(kp_vals, kd_vals, j_vals, c='red', s=20, alpha=0.6, label='Trials')
+
+    # 최적점 표시
+    best_idx = np.argmin(j_vals)
+    ax1.scatter(
+        [kp_vals[best_idx]], [kd_vals[best_idx]], [j_vals[best_idx]],
+        c='gold', s=200, marker='*', edgecolors='black', linewidth=1.5,
+        label=f'Best (J={j_vals[best_idx]:.2f})', zorder=10
+    )
+
+    ax1.set_xlabel("Kp_base", fontsize=10, labelpad=8)
+    ax1.set_ylabel("Kd_base", fontsize=10, labelpad=8)
+    ax1.set_zlabel("Score J", fontsize=10, labelpad=8)
+    ax1.set_title("3D 최적화 표면", fontsize=11, fontweight='bold')
+    ax1.view_init(elev=25, azim=45)
+    ax1.legend(fontsize=8)
+
+    # ── 서브플롯 2: 등고선도 (Contour) ──
+    ax2 = fig.add_subplot(122)
+    contour = ax2.contourf(KP, KD, J, levels=20, cmap='viridis', alpha=0.8)
+    contour_lines = ax2.contour(KP, KD, J, levels=10, colors='black', alpha=0.3, linewidths=0.5)
+    ax2.clabel(contour_lines, inline=True, fontsize=7)
+
+    # Trial 점들
+    scatter = ax2.scatter(kp_vals, kd_vals, c=j_vals, cmap='Reds',
+                         s=30, alpha=0.6, edgecolors='black', linewidth=0.5)
+
+    # 최적점
+    ax2.scatter(
+        [kp_vals[best_idx]], [kd_vals[best_idx]],
+        c='gold', s=300, marker='*', edgecolors='black', linewidth=2,
+        zorder=10
+    )
+
+    # 최적점 텍스트
+    ax2.annotate(
+        f"Optimal\nKp={kp_vals[best_idx]:.3f}\nKd={kd_vals[best_idx]:.3f}",
+        xy=(kp_vals[best_idx], kd_vals[best_idx]),
+        xytext=(kp_vals[best_idx] + 0.3, kd_vals[best_idx] + 0.3),
+        fontsize=9, fontweight='bold',
+        bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7),
+        arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0.3', lw=1.5)
+    )
+
+    ax2.set_xlabel("Kp_base", fontsize=10)
+    ax2.set_ylabel("Kd_base", fontsize=10)
+    ax2.set_title("최적화 공간 (등고선도)", fontsize=11, fontweight='bold')
+    cbar = plt.colorbar(contour, ax=ax2)
+    cbar.set_label("Score J", fontsize=9)
+
+    plt.tight_layout()
+    return fig
+
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
+    from scipy.interpolate import griddata
     from utils import set_korean_font, set_excel_style, XL_BLUE, XL_ORANGE, XL_RED, XL_GREEN, XL_YELLOW
     set_korean_font()
     set_excel_style()
@@ -199,8 +300,17 @@ if __name__ == "__main__":
     out_path = os.path.join(out_dir, "optimization_result.png")
     plt.savefig(out_path, dpi=120, facecolor="white")
 
+    # ── 시각화 2: 3D 최적화 표면 ──
+    print("\n  3D 최적화 표면 생성 중...")
+    fig_3d = visualize_3d_optimization_surface(study)
+    out_path_3d = os.path.join(out_dir, "optimization_3d_surface.png")
+    fig_3d.savefig(out_path_3d, dpi=120, facecolor="white", bbox_inches='tight')
+    print(f"  저장: {out_path_3d}")
+
     # ── 최적 gain 출력 ──
     print("\n  [controller.py에 붙여넣을 최적 GAIN 값]")
     print(f"  KP_BASE = {Kp_best:.4f}  # V=20 m/s 기준")
     print(f"  KD_BASE = {Kd_best:.4f}  # V=20 m/s 기준")
-    print(f"\n  그래프 저장: {out_path}")
+    print(f"\n  저장된 그래프:")
+    print(f"    optimization_result.png")
+    print(f"    optimization_3d_surface.png  ← 3D 표면 & 등고선도")

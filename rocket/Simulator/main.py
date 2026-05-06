@@ -27,7 +27,7 @@ from rocket_model import RocketModel, DEFAULT_PARAMS
 from controller   import PDController
 from simulator    import Simulator, velocity_profile
 from monte_carlo  import MonteCarlo, print_stats
-from optimization import run_optimization
+from optimization import run_optimization, visualize_3d_optimization_surface
 
 # ─────────────────────────────────────────
 # 설정
@@ -431,6 +431,16 @@ if __name__ == "__main__":
     stats_after = opt_result["final_stats"]
     study       = opt_result["study"]
 
+    # ── 3D 최적화 표면 생성 ──
+    print(f"\n{'='*55}")
+    print(f"  3D 최적화 표면 생성 중...")
+    print(f"{'='*55}")
+    fig_3d = visualize_3d_optimization_surface(study)
+    path_3d = os.path.join(OUTPUTS_DIR, "optimization_3d_surface.png")
+    fig_3d.savefig(path_3d, dpi=120, facecolor="white", bbox_inches='tight')
+    print(f"  저장: {path_3d}")
+    plt.close(fig_3d)
+
     # 최적 gain으로 단일 시뮬레이션
     rocket_final = RocketModel()
     ctrl_final   = PDController(Kp_base=best_kp, Kd_base=best_kd)
@@ -457,7 +467,10 @@ if __name__ == "__main__":
     print(f"  성공률  {stats_before['success_rate']:.1f}%  →  "
           f"{stats_after['success_rate']:.1f}%  🎯")
     print(f"\n  저장된 파일:")
-    print(f"    final_result.png  ← 전체 결과 요약 그래프")
+    print(f"    final_result.png")
+    print(f"    trajectories_grid.png")
+    print(f"    trajectories_overlay.png")
+    print(f"    optimization_3d_surface.png  ← 3D 최적화 표면 & 등고선도")
     print(f"\n  최적 gain (controller.py에 반영):")
     print(f"    KP_BASE = {best_kp:.4f}")
     print(f"    KD_BASE = {best_kd:.4f}")
