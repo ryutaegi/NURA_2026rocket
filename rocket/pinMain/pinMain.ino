@@ -436,15 +436,15 @@ if (dt > 0.0f) {
     // -----------------------------------------------------------------
     // 1. 센서 각도 랩핑(Wrapping) 및 180도 경계선 스파이크 방지
     // -----------------------------------------------------------------
-    float yaw_deg = wrap720_deg(flightData.filterRoll);  // 0~720
-    if (yaw_deg > 360.0f) yaw_deg -= 720.0f;  // -360~360 변환
+    //float yaw_deg = wrap720_deg(flightData.filterRoll);  // 0~720
+    //if (yaw_deg > 360.0f) yaw_deg -= 720.0f;  // -360~360 변환
     
     // 이전 각도와의 차이를 비교하여 180도 / -180도 경계선 점프 현상 보정
-    float diff = yaw_deg - prev_yaw;
-    if (diff > 180.0f) yaw_deg -= 360.0f;        // 179° → -179°로 튈 때 부드럽게 이어줌
-    else if (diff < -180.0f) yaw_deg += 360.0f;  // 반대 경우 보정
+    //float diff = yaw_deg - prev_yaw;
+    //if (diff > 180.0f) yaw_deg -= 360.0f;        // 179° → -179°로 튈 때 부드럽게 이어줌
+    //else if (diff < -180.0f) yaw_deg += 360.0f;  // 반대 경우 보정
 
-    prev_yaw = yaw_deg; // 다음 루프를 위해 저장
+    //prev_yaw = yaw_deg; // 다음 루프를 위해 저장
 
     // -----------------------------------------------------------------
     // 2. 동적 게인(Gain Scheduling) 기반 PD 제어 로직
