@@ -330,7 +330,7 @@ void loop() {
   }
   
   // 데이터가 있으면 실행, 데이터 유무 상관 없이 센서통신낙하산보드로 전송
-  if (dataAvailable) {
+  if (dataAvailable && isImuHealthy) {
 
 
      processIMU();  // 상보필터 업데이트
@@ -384,8 +384,15 @@ void loop() {
 // [변수 선언부 업데이트]
 const float GRAVITY = 980.665f; 
 const float VEL_DAMPING_MOVING = 1.0f; // 움직임 중: 거의 1.0에 가깝게 유지 (물리값 보존)
-const float VEL_DAMPING_STILL = 1.0f;    // 정지 중: 빠르게 드리프트 제거
-const float STATIONARY_THRESHOLD = 1200.2f; // 정지 판단 임계값 (노이즈 수준에 따라 조정)
+const float VEL_DAMPING_STILL = 0.5f;    // 정지 중: 빠르게 드리프트 제거
+const float STATIONARY_THRESHOLD = 1000.2f; // 정지 판단 임계값 (노이즈 수준에 따라 조정)
+
+const float P_DEADZONE_DEG = 1.5f;       
+const float V_CONTROL_START = 5.0f;      
+const float V_CONTROL_FULL = 20.0f;
+
+static float filtered_gyro_z = 0.0f;
+const float GYRO_LPF_ALPHA = 0.2f; 
 
 // ... loop() 내부 ...
 
@@ -405,9 +412,9 @@ if (accel_mag < STATIONARY_THRESHOLD) {
     vel_z *= VEL_DAMPING_STILL;
     
     // 임계값 이하 시 완전 정지
-    if (abs(vel_x) < 0.005f) vel_x = 0.0f;
-    if (abs(vel_y) < 0.005f) vel_y = 0.0f;
-    if (abs(vel_z) < 0.005f) vel_z = 0.0f;
+    if (abs(vel_x) < 0.01f) vel_x = 0.0f;
+    if (abs(vel_y) < 0.01f) vel_y = 0.0f;
+    if (abs(vel_z) < 0.01f) vel_z = 0.0f;
 } 
 else {
     // [이동 상태] 실제 가속도가 감지되면 댐핑을 거의 하지 않고 물리값에 가깝게 적분
@@ -416,9 +423,9 @@ else {
     vel_z += pure_az * dt;
     
     // 수치적 발산만 간신히 막는 수준의 초약세 댐핑
-    vel_x *= VEL_DAMPING_MOVING;
-    vel_y *= VEL_DAMPING_MOVING;
-    vel_z *= VEL_DAMPING_MOVING;
+    // vel_x *= VEL_DAMPING_MOVING;
+    // vel_y *= VEL_DAMPING_MOVING;
+    // vel_z *= VEL_DAMPING_MOVING;
 }
 
 // 4. 속도 결과 필터링 (필요 시 추가적인 LPF 적용 가능)
@@ -443,30 +450,53 @@ if (dt > 0.0f) {
     // 2. 동적 게인(Gain Scheduling) 기반 PD 제어 로직
     // -----------------------------------------------------------------
     // 2-1. 현재 속도(vel)를 기반으로 동적 Kp, Kd 값 갱신
-    float kp = 0.0f;
-    float kd = 0.0f;
+    // float kp = 0.0f;
+    // float kd = 0.0f;
 // loop() 내부 PD 제어 직전 추가
-float control_velocity = total_speed;
+//float control_velocity = total_speed;
 
 
 
     // 2-2. 수직 비행을 위한 목표 각도 (0도)
-    float targetYaw = 0.0f;
+    //float targetYaw = 0.0f;
 
     // 2-3. 현재 각도와의 오차(Error) 계산
     // [중요] 필터에서 바로 나온 값이 아닌, 랩핑 처리가 완료된 yaw_deg를 사용합니다.
-    float errorYaw = targetYaw - yaw_deg;       
+    //float errorYaw = targetYaw - yaw_deg;       
 
     // 2-4. 오차의 변화율(Derivative) 계산
-    float dErrorYaw = (errorYaw - prevErrorYaw) / dt;
+    //float dErrorYaw = (errorYaw - prevErrorYaw) / dt;
+
+    // 3. PD 제어항 분리 처리 (민감도 해결 로직 유지)
+    float errorYaw = 0.0f - flightData.filterRoll; 
+    float p_error = errorYaw;
+    if (abs(p_error) < P_DEADZONE_DEG) p_error = 0.0f; // Deadzone
+
+    // D항: 각속도 기반 댐핑 + LPF
+    float current_gz = flightData.imu.gz; 
+    filtered_gyro_z = (GYRO_LPF_ALPHA * current_gz) + (1.0f - GYRO_LPF_ALPHA) * filtered_gyro_z;
+
+    // 4. 제어 권한(Authority) 계산
+    float authority = (total_speed - V_CONTROL_START) / (V_CONTROL_FULL - V_CONTROL_START);
+    authority = constrain(authority, 0.0f, 1.0f);
+
+    // 5. 게인 적용 및 최종 출력
+    float kp = 0.0f, kd = 0.0f;
+    getKPKD(total_speed, kp, kd); 
+
+    float p_term = kp * p_error;
+    float d_term = kd * (-filtered_gyro_z);
+    
+    float outputYaw = (p_term + d_term) * authority;
+
 // 속도가 너무 낮으면 노이즈로 간주하고 제어를 감쇠하거나 정지
-if (control_velocity < 2000.0f) { // 단위가 m/s라면 0.5m/s 이하
-    control_velocity = 0.0f;
-    outputYaw = 0.0f; // 제어 출력 초기화
-} else {
-    getKPKD(control_velocity/100.0f, kp, kd); // 임계값 이상일 때만 게인 계산
-    outputYaw = (kp * errorYaw) + (kd * dErrorYaw);
-}
+// if (control_velocity < 2000.0f) { // 단위가 m/s라면 0.5m/s 이하
+//     control_velocity = 0.0f;
+//     outputYaw = 0.0f; // 제어 출력 초기화
+// } else {
+//     getKPKD(control_velocity/100.0f, kp, kd); // 임계값 이상일 때만 게인 계산
+//     outputYaw = (kp * errorYaw) + (kd * dErrorYaw);
+// }
    
 
     // -----------------------------------------------------------------
@@ -488,9 +518,14 @@ if (control_velocity < 2000.0f) { // 단위가 m/s라면 0.5m/s 이하
     // 다음 루프 미분항(D) 연산을 위해 현재 오차 저장
     prevErrorYaw = errorYaw;
 
-          Serial.print(servoDeg1); Serial.print(F("//"));
-       Serial.print(servoDeg2);  Serial.print(F("//"));
-       Serial.println(total_speed, 2); 
+       // 디버그 출력
+    if (millis() - lastDbgMs > 50) {
+      Serial.print(F("Vel:")); Serial.print(total_speed);
+      Serial.print(F("\tAccM:")); Serial.print(accel_mag);
+      Serial.print(F("\tAuth:")); Serial.print(authority);
+      Serial.print(F("\tOut:")); Serial.println(outputYaw);
+      lastDbgMs = millis();
+    }
   }
   
 
