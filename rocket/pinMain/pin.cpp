@@ -119,12 +119,12 @@ static inline float MAG_Z() {
   return myICM.magZ();
 }
 void getKPKD(float vel, float& kp, float& kd) {
-  const float V_BASE = 20.0f;
+  const float V_BASE = 2000.0f;
 
   const float KP_BASE = 2.7958f;
   const float KD_BASE = 0.3371f;
 
-  if (vel <= 1.0f) {
+  if (vel <= 100.0f) {
     vel = 1.0f;
   }
 

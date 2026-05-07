@@ -42,8 +42,8 @@ static const uint8_t  MOTOR_CH2   = 1;
 static const uint16_t SERVO_MIN_US = 500;
 static const uint16_t SERVO_MAX_US = 2500;
 
-static const float   SERVO_NEUTRAL_DEG1 = 74.0f;  //흰
-static const float   SERVO_NEUTRAL_DEG2 = 83.5f;  //검
+static const float   SERVO_NEUTRAL_DEG1 = 74.5f;  //흰
+static const float   SERVO_NEUTRAL_DEG2 = 88.5f;  //검
 static float servoDeg1 = SERVO_NEUTRAL_DEG1; 
 static float servoDeg2 = SERVO_NEUTRAL_DEG2;
 // [설정] 서보 물리적 제한 각도
@@ -235,7 +235,7 @@ void setup() {
   writeServoDeg(MOTOR_CH1, SERVO_NEUTRAL_DEG1);
   writeServoDeg(MOTOR_CH2, SERVO_NEUTRAL_DEG2);
 
-  pinMode(PIN_CONNECT_DETECT, INPUT);
+  pinMode(PIN_CONNECT_DETECT, INPUT_PULLUP);
   if (digitalRead(PIN_CONNECT_DETECT) == LOW) 
   {
    
@@ -388,8 +388,8 @@ const float VEL_DAMPING_STILL = 0.5f;    // 정지 중: 빠르게 드리프트 �
 const float STATIONARY_THRESHOLD = 1000.2f; // 정지 판단 임계값 (노이즈 수준에 따라 조정)
 
 const float P_DEADZONE_DEG = 1.5f;       
-const float V_CONTROL_START = 5.0f;      
-const float V_CONTROL_FULL = 20.0f;
+const float V_CONTROL_START = 500.0f;      
+const float V_CONTROL_FULL = 2000.0f;
 
 static float filtered_gyro_z = 0.0f;
 const float GYRO_LPF_ALPHA = 0.2f; 
@@ -403,9 +403,9 @@ float pure_az = az_f - GRAVITY; // Z축 중력 제거
 
 // 2. 가속도 벡터 크기 계산 (정지 판별용)
 float accel_mag = sqrt(pure_ax * pure_ax + pure_ay * pure_ay + pure_az * pure_az);
-
+bool launched = (digitalRead(PIN_CONNECT_DETECT) == HIGH);
 // 3. 조건부 속도 적분 및 적응형 댐핑
-if (accel_mag < STATIONARY_THRESHOLD) {
+if (!launched) {
     // [정지 상태] 가속도가 작으면 센서 드리프트로 간주하고 속도를 0으로 강제 수렴
     vel_x *= VEL_DAMPING_STILL; 
     vel_y *= VEL_DAMPING_STILL;
@@ -487,7 +487,7 @@ if (dt > 0.0f) {
     float p_term = kp * p_error;
     float d_term = kd * (-filtered_gyro_z);
     
-    float outputYaw = (p_term + d_term) * authority;
+    outputYaw = (p_term + d_term) * authority;
 
 // 속도가 너무 낮으면 노이즈로 간주하고 제어를 감쇠하거나 정지
 // if (control_velocity < 2000.0f) { // 단위가 m/s라면 0.5m/s 이하
@@ -524,6 +524,14 @@ if (dt > 0.0f) {
       Serial.print(F("\tAccM:")); Serial.print(accel_mag);
       Serial.print(F("\tAuth:")); Serial.print(authority);
       Serial.print(F("\tOut:")); Serial.println(outputYaw);
+Serial.print(F("\tRoll:")); Serial.print(flightData.filterRoll);
+Serial.print(F("\tGz:")); Serial.print(filtered_gyro_z);
+Serial.print(F("\tKp:")); Serial.print(kp, 4);
+Serial.print(F("\tKd:")); Serial.print(kd, 4);
+Serial.print(F("\tP:")); Serial.print(p_term, 3);
+Serial.print(F("\tD:")); Serial.print(d_term, 3);
+Serial.print(F("\tAuth:")); Serial.print(authority, 2);
+Serial.print(F("\tOut:")); Serial.println(outputYaw, 3);
       lastDbgMs = millis();
     }
   }
