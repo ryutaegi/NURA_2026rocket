@@ -468,7 +468,7 @@ if (dt > 0.0f) {
     // float dErrorYaw = (errorYaw - prevErrorYaw) / dt;
 
     // 3. PD 제어항 분리 처리 (민감도 해결 로직 유지)
-    float errorYaw = 0.0f - flightData.filterRoll; 
+    float errorYaw = 0.0f - yaw_deg; 
     float p_error = errorYaw;
     if (abs(p_error) < P_DEADZONE_DEG) p_error = 0.0f; // Deadzone
 
@@ -524,14 +524,14 @@ if (dt > 0.0f) {
       Serial.print(F("\tAccM:")); Serial.print(accel_mag);
       Serial.print(F("\tAuth:")); Serial.print(authority);
       Serial.print(F("\tOut:")); Serial.println(outputYaw);
-Serial.print(F("\tRoll:")); Serial.print(flightData.filterRoll);
-Serial.print(F("\tGz:")); Serial.print(filtered_gyro_z);
-Serial.print(F("\tKp:")); Serial.print(kp, 4);
-Serial.print(F("\tKd:")); Serial.print(kd, 4);
-Serial.print(F("\tP:")); Serial.print(p_term, 3);
-Serial.print(F("\tD:")); Serial.print(d_term, 3);
-Serial.print(F("\tAuth:")); Serial.print(authority, 2);
-Serial.print(F("\tOut:")); Serial.println(outputYaw, 3);
+      Serial.print(F("\tRoll:")); Serial.print(flightData.filterRoll);
+      Serial.print(F("\tGz:")); Serial.print(filtered_gyro_z);
+      Serial.print(F("\tKp:")); Serial.print(kp, 4);
+      Serial.print(F("\tKd:")); Serial.print(kd, 4);
+      Serial.print(F("\tP:")); Serial.print(p_term, 3);
+      Serial.print(F("\tD:")); Serial.print(d_term, 3);
+      Serial.print(F("\tAuth:")); Serial.print(authority, 2);
+      Serial.print(F("\tOut:")); Serial.println(outputYaw, 3);
       lastDbgMs = millis();
     }
   }
