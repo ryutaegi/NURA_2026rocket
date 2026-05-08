@@ -11,6 +11,15 @@ unsigned long lastMs = 0;
 float diff = 0.0f;
 
 // ======================= 자이로 캘리브레이션 변수 =======================
+     // 가속도 바이어스 저장 변수 (단위: G)
+float accelBiasX = 79.365f;
+float accelBiasY = -1.929f;
+float accelBiasZ = 53.947f;
+
+// 캘리브레이션 관련 설정
+const int BIAS_SAMPLES = 1000; // 바이어스 측정을 위해 수집할 샘플 개수
+bool isCalibrated = false;    // 캘리브레이션 완료 여부 플래그
+
 static bool gyro_calibrating = false;
 static float gx_bias = -0.3257f, gy_bias = -0.3807f, gz_bias = 0.5573f;
 static float gx_sum = 0.0f, gy_sum = 0.0f, gz_sum = 0.0f;
@@ -88,13 +97,13 @@ static inline float rad2deg(float r) {
 
 // ======================= 축 매핑 =======================
 static inline float ACC_X() {
-  return myICM.accX();
+  return myICM.accX()-accelBiasX;
 }
 static inline float ACC_Y() {
-  return myICM.accY();
+  return myICM.accY()-accelBiasY;
 }
 static inline float ACC_Z() {
-  return myICM.accZ();
+  return myICM.accZ()-accelBiasZ;
 }
 
 // ======================= 축 매핑 (바이어스 적용) =======================
@@ -229,15 +238,63 @@ const float NOISE_THRESHOLD = deg2rad(15.0f);
   flightData.pitch = earth_pitch;
   flightData.yaw = earth_yaw;
  
-     
+
+
+// =========================================================
+// 2. 가속도 바이어스 캘리브레이션 함수 (전역 스코프에 추가)
+// =========================================================
+// 주의: 기체가 완벽히 정지해 있고, 수평을 유지한 상태에서 실행해야 합니다.
+// 가정: 로켓이 똑바로 서 있을 때 Z축 방향이 하늘(또는 땅)을 향해 중력 1G를 받는다고 가정.
+
+  float sumX = 0, sumY = 0, sumZ = 0;
+  int validSamples = 0;
+
+  Serial.println(F("가속도 센서 바이어스 캘리브레이션 시작..."));
+  Serial.println(F("경고: 기체를 절대로 움직이지 마세요."));
+
+  while (validSamples < BIAS_SAMPLES) {
+    if (myICM.dataReady()) {
+      myICM.getAGMT(); // 센서 데이터 읽기
+      
+      // 단위를 G(중력가속도)로 변환하여 누적. 
+      // (센서 설정에 따라 1000.0f 등 스케일 팩터로 나누어야 할 수 있음)
+      // 현재 코드의 단위 체계가 밀리-지(mG)라면 1000으로 나누고, 이미 G라면 그대로 사용.
+      sumX += myICM.accX(); 
+      sumY += myICM.accY();
+      sumZ += myICM.accZ();
+      
+      validSamples++;
+      // 진행 상황을 점으로 표시 (100번마다)
+      if (validSamples % 100 == 0) {
+        Serial.print(".");
+      }
+    }
+    delay(5); // 센서의 샘플링 속도(예: 200Hz)에 맞춘 대기 시간
+  }
+
+  // 평균값 계산
+  accelBiasX = sumX / BIAS_SAMPLES;
+  accelBiasY = sumY / BIAS_SAMPLES;
+  
+  // Z축 보정: 
+  // 정지 상태에서 Z축이 하늘을 향한다면 중력(1G)이 측정되므로, 이 1G를 빼서 순수 바이어스만 남깁니다.
+  // 만약 기체 방향이나 센서 장착 방향에 따라 Z축이 아래를 향해 -1G가 찍힌다면 +1.0f를 해야 합니다.
+  accelBiasZ = (sumZ / BIAS_SAMPLES) - 1.0f; 
+
+  isCalibrated = true;
+  Serial.println(F("\n바이어스 캘리브레이션 완료!"));
+  Serial.print("Bias X: "); Serial.print(accelBiasX, 4); Serial.println(" G");
+  Serial.print("Bias Y: "); Serial.print(accelBiasY, 4); Serial.println(" G");
+  Serial.print("Bias Z-: "); Serial.print(accelBiasZ, 4); Serial.println(" G");
+
 //     Serial.print(0.5); Serial.print(",");
 //    Serial.print(-0.5); Serial.print(",");
 // //   Serial.print(",");
-     Serial.print(imuData.ax, 4);
-Serial.print(",");
-  Serial.print(imuData.ay, 4);
-Serial.print(",");
-  Serial.println(imuData.az, 4);
+//      Serial.print(imuData.ax, 4);
+// Serial.print(",");
+//   Serial.print(imuData.ay, 4);
+// Serial.print(",");
+//   Serial.println(imuData.az, 4);
 //     Serial.print(mahony9.q1, 4);
 // Serial.print(",");
 //   Serial.print(mahony9.q2, 4);

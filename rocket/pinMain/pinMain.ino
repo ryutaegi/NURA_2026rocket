@@ -36,7 +36,6 @@ Adafruit_PWMServoDriver pca9685 = Adafruit_PWMServoDriver(0x40);
 static const float STARTUP_SWEEP_OFFSET_DEG = 45.0f; 
 
 static const uint16_t PCA_FREQ_HZ = 50;
-
 static const uint8_t  MOTOR_CH1   = 0;
 static const uint8_t  MOTOR_CH2   = 1;
 
@@ -48,7 +47,7 @@ static const float   SERVO_NEUTRAL_DEG2 = 76.5f;  //검
 static float servoDeg1 = SERVO_NEUTRAL_DEG1; 
 static float servoDeg2 = SERVO_NEUTRAL_DEG2;
 // [설정] 서보 물리적 제한 각도
-static const float    MAX_SERVO_LIMIT = 24.4f; 
+static const float    MAX_SERVO_LIMIT = 18.0f; 
 
 // 이전 yaw  
 static float prev_yaw = 0.0f;
@@ -405,9 +404,9 @@ const float GYRO_LPF_ALPHA = 0.2f;
 // ... loop() 내부 ..
 
 // 1. 순수 선가속도 추출 (중력 보정)
-float pure_ax = ax_f - gravityX; 
-float pure_ay = ay_f - gravityY;
-float pure_az = az_f - gravityZ; // Z축 중력 제거
+float pure_ax = ax_f - 1033*gravityX; 
+float pure_ay = ay_f - 1033*gravityY;
+float pure_az = az_f - 1033*gravityZ; // Z축 중력 제거
 
 
 // 2. 가속도 벡터 크기 계산 (정지 판별용)
@@ -496,7 +495,7 @@ if (dt > 0.0f) {
     float p_term = kp * p_error;
     float d_term = kd * (-filtered_gyro_z);
     
-    outputYaw = (p_term + d_term) * authority;
+    outputYaw =- (p_term + d_term) * authority;
 
 // 속도가 너무 낮으면 노이즈로 간주하고 제어를 감쇠하거나 정지
 // if (control_velocity < 2000.0f) { // 단위가 m/s라면 0.5m/s 이하
@@ -529,19 +528,18 @@ if (dt > 0.0f) {
 
        // 디버그 출력
     if (millis() - lastDbgMs > 50) {
-      // Serial.print(F("Vel:")); Serial.print(total_speed);
-      // // Serial.print(F("\tAccM:")); Serial.print(accel_mag);
-      // // Serial.print(F("\tAuth:")); Serial.print(authority);
-      // // Serial.print(F("\tOut:")); Serial.println(outputYaw);
+      Serial.print(F("Vel:")); Serial.print(total_speed);
+      Serial.print("gravityX:"); Serial.print(gravityX);
+      Serial.print("gravityY:"); Serial.print(gravityY);
+      Serial.print("gravityZ:"); Serial.print(gravityZ);
       // Serial.print(F("\tRoll:")); Serial.print(flightData.filterRoll);
       // // Serial.print(F("\tGz:")); Serial.print(filtered_gyro_z);
       // Serial.print(F("\s1:")); Serial.print(servoDeg1, 2);
       // Serial.print(F("\s2:")); Serial.println(servoDeg2, 2);
       // Serial.print(F("\tP:")); Serial.print(p_term, 3);
-      Serial.print(F("\ax:")); Serial.print(pure_ax
-, 2);
-      Serial.print(F("\ay:")); Serial.print(pure_ay, 2);
-      Serial.print(F("\az:")); Serial.println(pure_az, 2);
+      Serial.print("ax:"); Serial.print(pure_ax, 2);
+      Serial.print("ay:"); Serial.print(pure_ay, 2);
+      Serial.print("az:"); Serial.println(pure_az, 2);
       lastDbgMs = millis();
     }
   }
