@@ -79,7 +79,7 @@ void Adafruit_Mahony::update(float gx, float gy, float gz, float ax, float ay,
     halfvz = q0q0 - 0.5f + q3q3;
 
     halfwx = bx * (0.5f - q2q2 - q3q3) + bz * (q1q3 - q0q2);
-    halfwy = bx * (q1q2 - q0q3) + bz * (0.5f - q1+q1 + q2q3); // 오타 수정: q2q3
+    halfwy = bx * (q1q2 - q0q3) + bz * (0.5f - q1q1 + q2q3); 
     halfwz = bx * (q0q2 + q1q3) + bz * (0.5f - q1q1 - q2q2);
 
     // 오차 계산 (측정값과 추정값의 외적)

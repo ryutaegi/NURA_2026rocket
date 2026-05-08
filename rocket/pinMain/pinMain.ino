@@ -433,18 +433,18 @@ float total_speed = sqrt(vel_x * vel_x + vel_y * vel_y + vel_z * vel_z);
 
 
 if (dt > 0.0f) {
-    // -----------------------------------------------------------------
+    -----------------------------------------------------------------
     // 1. 센서 각도 랩핑(Wrapping) 및 180도 경계선 스파이크 방지
-    // -----------------------------------------------------------------
-    //float yaw_deg = wrap720_deg(flightData.filterRoll);  // 0~720
-    //if (yaw_deg > 360.0f) yaw_deg -= 720.0f;  // -360~360 변환
+    -----------------------------------------------------------------
+    float yaw_deg = wrap720_deg(flightData.filterRoll);  // 0~720
+    if (yaw_deg > 360.0f) yaw_deg -= 720.0f;  // -360~360 변환
     
     // 이전 각도와의 차이를 비교하여 180도 / -180도 경계선 점프 현상 보정
-    //float diff = yaw_deg - prev_yaw;
-    //if (diff > 180.0f) yaw_deg -= 360.0f;        // 179° → -179°로 튈 때 부드럽게 이어줌
-    //else if (diff < -180.0f) yaw_deg += 360.0f;  // 반대 경우 보정
+    float diff = yaw_deg - prev_yaw;
+    if (diff > 180.0f) yaw_deg -= 360.0f;        // 179° → -179°로 튈 때 부드럽게 이어줌
+    else if (diff < -180.0f) yaw_deg += 360.0f;  // 반대 경우 보정
 
-    //prev_yaw = yaw_deg; // 다음 루프를 위해 저장
+    prev_yaw = yaw_deg; // 다음 루프를 위해 저장
 
     // -----------------------------------------------------------------
     // 2. 동적 게인(Gain Scheduling) 기반 PD 제어 로직
@@ -458,14 +458,14 @@ if (dt > 0.0f) {
 
 
     // 2-2. 수직 비행을 위한 목표 각도 (0도)
-    //float targetYaw = 0.0f;
+    // float targetYaw = 0.0f;
 
     // 2-3. 현재 각도와의 오차(Error) 계산
     // [중요] 필터에서 바로 나온 값이 아닌, 랩핑 처리가 완료된 yaw_deg를 사용합니다.
-    //float errorYaw = targetYaw - yaw_deg;       
+    // float errorYaw = targetYaw - yaw_deg;       
 
     // 2-4. 오차의 변화율(Derivative) 계산
-    //float dErrorYaw = (errorYaw - prevErrorYaw) / dt;
+    // float dErrorYaw = (errorYaw - prevErrorYaw) / dt;
 
     // 3. PD 제어항 분리 처리 (민감도 해결 로직 유지)
     float errorYaw = 0.0f - flightData.filterRoll; 
