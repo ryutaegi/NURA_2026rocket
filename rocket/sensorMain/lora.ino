@@ -7,7 +7,7 @@
 
 // ======================= LoRa 설정 =======================
 #define LORA_PORT  Serial2
-static const uint32_t LORA_BAUD = 28800;
+static const uint32_t LORA_BAUD = 38400;
 static const uint8_t  LORA_ADDR = 0;            // AT+SEND=0,...
 static const uint32_t LORA_PERIOD_MS = 200;     //  송신 hz
 

@@ -2,7 +2,7 @@
 #include <string.h>
 #include <ctype.h>
 
-SoftwareSerial lora(2, 3); // RX, TX
+SoftwareSerial lora(4,5); // RX, TX
 
 int ejection = false;
 int sound = false;
@@ -240,7 +240,7 @@ void sendReset() {
 // =======================
 void setup() {
   Serial.begin(115200);
-  lora.begin(28800);
+  lora.begin(38400);
   Serial.println("RX READY");
 
   pinMode(13, OUTPUT);
