@@ -185,7 +185,11 @@ const float NOISE_THRESHOLD = deg2rad(15.0f);
 
   mahony6.updateIMU(gx, gy, gz, ax, ay, az, dt);
   mahony6.computeAngles();
-  
+   
+
+
+
+
   sensor_yaw = mahony6.yaw;
 
 
@@ -229,11 +233,11 @@ const float NOISE_THRESHOLD = deg2rad(15.0f);
 //     Serial.print(0.5); Serial.print(",");
 //    Serial.print(-0.5); Serial.print(",");
 // //   Serial.print(",");
-//      Serial.print(imuData.gx, 4);
-// Serial.print(",");
-//   Serial.print(imuData.gy, 4);
-// Serial.print(",");
-//   Serial.println(imuData.gz, 4);
+     Serial.print(imuData.ax, 4);
+Serial.print(",");
+  Serial.print(imuData.ay, 4);
+Serial.print(",");
+  Serial.println(imuData.az, 4);
 //     Serial.print(mahony9.q1, 4);
 // Serial.print(",");
 //   Serial.print(mahony9.q2, 4);

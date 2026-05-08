@@ -2,12 +2,12 @@
 #include <Adafruit_PWMServoDriver.h>
 #include <float.h>
 #include <avr/wdt.h>
-
+#include "Adafruit_AHRS_Mahony.h"
 #include "pin.h"           // 상보필터/IMU 처리
 #include "servo_driver.h"
 
 #define PIN_CONNECT_DETECT 2
-
+Adafruit_Mahony mahony0;
 
 // float diff = 0.0f;
 // float prevValue = 0.0f;         // 이전값 저장용
@@ -21,6 +21,7 @@ static uint32_t stable_count = 0;
 static uint32_t last_stable_time = 0;
   static float prevErrorYaw = 0.0f;
   static unsigned long prevTimePD = 0;
+
 float vel_x = 0.0f;
 float vel_y = 0.0f;
 float vel_z = 0.0f;
@@ -375,11 +376,18 @@ void loop() {
 
     static float last_yaw_deg = 0.0f;
 
-
-    // =================  롤 제어 =================
   unsigned long currentTime = micros();
   float dt = (currentTime - prevTimePD) / 1000000.0f;
   prevTimePD = currentTime;
+
+
+float gravityX, gravityY, gravityZ;
+  mahony0.updateIMU(gx_f, gy_f, gz_f, ax_f, ay_f, az_f, dt);
+  mahony0.computeAngles();
+   
+// mahony6 객체가 선언되어 있고 update가 완료된 상태여야 함
+mahony0.getGravityVector(&gravityX, &gravityY, &gravityZ);
+    // =================  롤 제어 =================
 
 // [변수 선언부 업데이트]
 const float GRAVITY = 980.665f; 
@@ -394,12 +402,13 @@ const float V_CONTROL_FULL = 2000.0f;
 static float filtered_gyro_z = 0.0f;
 const float GYRO_LPF_ALPHA = 0.2f; 
 
-// ... loop() 내부 ...
+// ... loop() 내부 ..
 
 // 1. 순수 선가속도 추출 (중력 보정)
-float pure_ax = ax_f; 
-float pure_ay = ay_f;
-float pure_az = az_f - GRAVITY; // Z축 중력 제거
+float pure_ax = ax_f - gravityX; 
+float pure_ay = ay_f - gravityY;
+float pure_az = az_f - gravityZ; // Z축 중력 제거
+
 
 // 2. 가속도 벡터 크기 계산 (정지 판별용)
 float accel_mag = sqrt(pure_ax * pure_ax + pure_ay * pure_ay + pure_az * pure_az);
@@ -433,9 +442,9 @@ float total_speed = sqrt(vel_x * vel_x + vel_y * vel_y + vel_z * vel_z);
 
 
 if (dt > 0.0f) {
-    -----------------------------------------------------------------
-    // 1. 센서 각도 랩핑(Wrapping) 및 180도 경계선 스파이크 방지
-    -----------------------------------------------------------------
+    // -----------------------------------------------------------------
+    // // 1. 센서 각도 랩핑(Wrapping) 및 180도 경계선 스파이크 방지
+    // -----------------------------------------------------------------
     float yaw_deg = wrap720_deg(flightData.filterRoll);  // 0~720
     if (yaw_deg > 360.0f) yaw_deg -= 720.0f;  // -360~360 변환
     
@@ -458,17 +467,17 @@ if (dt > 0.0f) {
 
 
     // 2-2. 수직 비행을 위한 목표 각도 (0도)
-    // float targetYaw = 0.0f;
+    float targetYaw = 0.0f;
 
     // 2-3. 현재 각도와의 오차(Error) 계산
     // [중요] 필터에서 바로 나온 값이 아닌, 랩핑 처리가 완료된 yaw_deg를 사용합니다.
-    // float errorYaw = targetYaw - yaw_deg;       
+    float errorYaw = targetYaw - yaw_deg;       
 
     // 2-4. 오차의 변화율(Derivative) 계산
     // float dErrorYaw = (errorYaw - prevErrorYaw) / dt;
 
     // 3. PD 제어항 분리 처리 (민감도 해결 로직 유지)
-    float errorYaw = 0.0f - yaw_deg; 
+    
     float p_error = errorYaw;
     if (abs(p_error) < P_DEADZONE_DEG) p_error = 0.0f; // Deadzone
 
@@ -520,18 +529,19 @@ if (dt > 0.0f) {
 
        // 디버그 출력
     if (millis() - lastDbgMs > 50) {
-      Serial.print(F("Vel:")); Serial.print(total_speed);
-      Serial.print(F("\tAccM:")); Serial.print(accel_mag);
-      Serial.print(F("\tAuth:")); Serial.print(authority);
-      Serial.print(F("\tOut:")); Serial.println(outputYaw);
-      Serial.print(F("\tRoll:")); Serial.print(flightData.filterRoll);
-      Serial.print(F("\tGz:")); Serial.print(filtered_gyro_z);
-      Serial.print(F("\tKp:")); Serial.print(kp, 4);
-      Serial.print(F("\tKd:")); Serial.print(kd, 4);
-      Serial.print(F("\tP:")); Serial.print(p_term, 3);
-      Serial.print(F("\tD:")); Serial.print(d_term, 3);
-      Serial.print(F("\tAuth:")); Serial.print(authority, 2);
-      Serial.print(F("\tOut:")); Serial.println(outputYaw, 3);
+      // Serial.print(F("Vel:")); Serial.print(total_speed);
+      // // Serial.print(F("\tAccM:")); Serial.print(accel_mag);
+      // // Serial.print(F("\tAuth:")); Serial.print(authority);
+      // // Serial.print(F("\tOut:")); Serial.println(outputYaw);
+      // Serial.print(F("\tRoll:")); Serial.print(flightData.filterRoll);
+      // // Serial.print(F("\tGz:")); Serial.print(filtered_gyro_z);
+      // Serial.print(F("\s1:")); Serial.print(servoDeg1, 2);
+      // Serial.print(F("\s2:")); Serial.println(servoDeg2, 2);
+      // Serial.print(F("\tP:")); Serial.print(p_term, 3);
+      Serial.print(F("\ax:")); Serial.print(pure_ax
+, 2);
+      Serial.print(F("\ay:")); Serial.print(pure_ay, 2);
+      Serial.print(F("\az:")); Serial.println(pure_az, 2);
       lastDbgMs = millis();
     }
   }
