@@ -433,9 +433,8 @@ float total_speed = sqrt(vel_x * vel_x + vel_y * vel_y + vel_z * vel_z);
 
 
 if (dt > 0.0f) {
-    -----------------------------------------------------------------
     // 1. 센서 각도 랩핑(Wrapping) 및 180도 경계선 스파이크 방지
-    -----------------------------------------------------------------
+   
     float yaw_deg = wrap720_deg(flightData.filterRoll);  // 0~720
     if (yaw_deg > 360.0f) yaw_deg -= 720.0f;  // -360~360 변환
     
