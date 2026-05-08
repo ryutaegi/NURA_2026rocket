@@ -616,6 +616,13 @@ void loop() {
       gps.encode(Serial1.read());
 
   handleLoraRxCommand();  // 지상국 명령 수신
+  // 리셋
+  if(isReset) {
+    sendBtoA_Reset(Serial3, true, millis());
+    isReset=false;
+    delay(500);
+    softwareReset();
+  }
   // // if(Serial2.available())
   // //   Serial.println("asdfasdf");
 
@@ -759,13 +766,6 @@ void loop() {
   // //     b2aBurst = false;
   // //   }
   // // }
-  if(isReset) {
-    sendBtoA_Reset(Serial3, true, millis());
-    isReset=false;
-    delay(500);
-    softwareReset();
-  }
-
   // // ========= 낙하산 서보 FSM 실행 ========================
 
    applyParachuteDeployState();
