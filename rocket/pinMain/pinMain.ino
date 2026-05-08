@@ -527,21 +527,20 @@ if (dt > 0.0f) {
     prevErrorYaw = errorYaw;
 
        // 디버그 출력
-    if (millis() - lastDbgMs > 50) {
-      Serial.print(F("Vel:")); Serial.print(total_speed);
-      Serial.print("gravityX:"); Serial.print(gravityX);
-      Serial.print("gravityY:"); Serial.print(gravityY);
-      Serial.print("gravityZ:"); Serial.print(gravityZ);
-      // Serial.print(F("\tRoll:")); Serial.print(flightData.filterRoll);
+  
+      Serial.print("Vel:"); Serial.print(total_speed);
+      // Serial.print("gravityX:"); Serial.print(gravityX);
+      // Serial.print("gravityY:"); Serial.print(gravityY);
+      // Serial.print("gravityZ:"); Serial.print(gravityZ);
+      Serial.print("Roll:"); Serial.print(flightData.filterRoll);
       // // Serial.print(F("\tGz:")); Serial.print(filtered_gyro_z);
-      // Serial.print(F("\s1:")); Serial.print(servoDeg1, 2);
-      // Serial.print(F("\s2:")); Serial.println(servoDeg2, 2);
+      Serial.print("servo1:"); Serial.print(servoDeg1, 2);
+      Serial.print("servo2:"); Serial.println(servoDeg2, 2);
       // Serial.print(F("\tP:")); Serial.print(p_term, 3);
       Serial.print("ax:"); Serial.print(pure_ax, 2);
       Serial.print("ay:"); Serial.print(pure_ay, 2);
       Serial.print("az:"); Serial.println(pure_az, 2);
-      lastDbgMs = millis();
-    }
+    
   }
   
 
