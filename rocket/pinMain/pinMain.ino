@@ -404,9 +404,9 @@ const float GYRO_LPF_ALPHA = 0.2f;
 // ... loop() 내부 ..
 
 // 1. 순수 선가속도 추출 (중력 보정)
-float pure_ax = ax_f - 1033*gravityX; 
-float pure_ay = ay_f - 1033*gravityY;
-float pure_az = az_f - 1033*gravityZ; // Z축 중력 제거
+float pure_ax = ax_f + 980.665f*gravityX; 
+float pure_ay = ay_f + 980.665f*gravityY;
+float pure_az = az_f - 980.665f*gravityZ; // Z축 중력 제거
 
 
 // 2. 가속도 벡터 크기 계산 (정지 판별용)

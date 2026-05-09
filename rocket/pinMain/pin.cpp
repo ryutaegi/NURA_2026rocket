@@ -27,6 +27,7 @@ float mag_off_x = 11.65f, mag_off_y = -30.7f, mag_off_z = -86.05f;
 float mag_scale_x = 1, mag_scale_y = 1, mag_scale_z = 1;
 static uint32_t gyro_sample_count = 0;
 const uint32_t GYRO_CAL_SAMPLES = 100;
+float total_speed;
 // 전역 변수 선언 필요
 //  float diff_q1 = 0.0f, diff_q2 = 0.0f, diff_q3 = 0.0f;
 //  float prev_q1 = 0.0f, prev_q2 = 0.0f, prev_q3 = 0.0f;
@@ -38,7 +39,7 @@ ICM_20948_I2C myICM;
 // ======================= 사용자 설정 =======================
 const uint32_t PRINT_PERIOD_MS = 50;
 
-const float LPF_K = 0.20f;
+const float LPF_K = 1.0f;
 static unsigned long last_correction_time = 0;
 static float yaw_drift_total = 0.0f;
 ImuData imuData = {};
@@ -169,9 +170,9 @@ const float NOISE_THRESHOLD = deg2rad(15.0f);
   my = (my - mag_off_y) * mag_scale_y;
   mz = (mz - mag_off_z) * mag_scale_z;
 
-  ax_f += LPF_K * (ax - ax_f);
-  ay_f += LPF_K * (ay - ay_f);
-  az_f += LPF_K * (az - az_f);
+  ax_f = ax;
+  ay_f = ay;
+  az_f = az;
 
   gx_f += LPF_K * (gx - gx_f);
   gy_f += LPF_K * (gy - gy_f);
@@ -185,7 +186,7 @@ const float NOISE_THRESHOLD = deg2rad(15.0f);
   imuData.ay = ay;
   imuData.az = az;
 
-  imuData.gx = rad2deg(gx);  // 라디안을 도(deg)로 변환
+  imuData.gx = total_speed;  // 라디안을 도(deg)로 변환
   imuData.gy = rad2deg(gy);
   imuData.gz = rad2deg(gz);
 
