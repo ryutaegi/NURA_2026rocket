@@ -411,9 +411,8 @@ float pure_az = az_f - 980.665f*gravityZ; // Z축 중력 제거
 
 // 2. 가속도 벡터 크기 계산 (정지 판별용)
 float accel_mag = sqrt(pure_ax * pure_ax + pure_ay * pure_ay + pure_az * pure_az);
-bool launched = (digitalRead(PIN_CONNECT_DETECT) == HIGH);
 // 3. 조건부 속도 적분 및 적응형 댐핑
-if (!launched) {
+if (accel_mag>12000.0f) {
     // [정지 상태] 가속도가 작으면 센서 드리프트로 간주하고 속도를 0으로 강제 수렴
     vel_x *= VEL_DAMPING_STILL; 
     vel_y *= VEL_DAMPING_STILL;
