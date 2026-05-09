@@ -170,7 +170,7 @@ let recordedData = [];
 
 // 시리얼 포트 설정 (아두이노 연결)
 // COM 포트는 환경에 맞게 수정 필요 (예: Windows - 'COM3', macOS/Linux - '/dev/tty.usbserial-XXXX')
-const SERIAL_PORT = '/dev/tty.usbserial-1120'; // 실제 포트로 변경하세요
+const SERIAL_PORT = '/dev/tty.usbserial-1110'; // 실제 포트로 변경하세요
 const BAUD_RATE = 115200; // 아두이노와 동일하게 설정
 
 let serialPort;
@@ -400,19 +400,63 @@ wss.on('connection', (ws) => {
           isRecording = false;
           const msgData = msg.data || {}; // 메시지에 data 객체가 없을 경우를 대비
 
+          // 클라이언트 필드명에 맞게 변환 (lat→latitude, lon→longitude 등)
+          const convertedTelemetryData = recordedData.map(data => {
+            // q0 계산 (q15 디코딩과 동일)
+            const q1 = data.q1 / 32767.0;
+            const q2 = data.q2 / 32767.0;
+            const q3 = data.q3 / 32767.0;
+            const q0 = Math.sqrt(Math.max(0, 1 - q1 ** 2 - q2 ** 2 - q3 ** 2));
+
+            // flag1 파싱
+            const connectPin = Boolean(data.flag1 & 0x01);
+            const parachute  = Boolean((data.flag1 >> 1) & 0x01);
+            const ejectBtn   = Boolean((data.flag1 >> 2) & 0x01);
+            const soundBtn   = Boolean((data.flag1 >> 3) & 0x01);
+            const sats       = (data.flag1 >> 4) & 0x0F;
+
+            // flag2 파싱
+            const flightPhase    = data.flag2 & 0x07;
+            const ejectTimer     = Boolean((data.flag2 >> 3) & 0x01);
+            const ejectDescent   = Boolean((data.flag2 >> 4) & 0x01);
+            const extra1 = Boolean((data.flag2 >> 5) & 0x01);
+
+            const parachuteEjectReason = ejectBtn ? 1 : ejectDescent ? 2 : ejectTimer ? 3 : 0;
+            const roll = data.roll - 127;
+
+            return {
+              latitude: data.lat / 1e7,
+              longitude: data.lon / 1e7,
+              altitude: data.alt,
+              q0, q1, q2, q3,
+              roll,
+              temperature: data.temp - 20,
+              sats,
+              soundBtn,
+              ejectBtn,
+              parachute,
+              connectPin,
+              flightPhase,
+              extra1,
+              ejectDescent,
+              ejectTimer,
+              parachuteEjectReason,
+            };
+          });
+
           const launchRecord = {
             id: currentRecording.id,
             name: msgData.name || `발사 #${currentRecording.id}`, // 요청: 메시지에서 이름(name)을 받아 추가
             date: new Date(currentRecording.startTime).toISOString(),
             launchSite: currentRecording.launchSite, // 'start_recording' 시점에 저장된 위치
             duration: (Date.now() - currentRecording.startTime) / 1000,
-            telemetryData: recordedData,
-            maxAltitude: Math.max(...recordedData.map(d => d.altitude)),
-            maxSpeed: Math.max(...recordedData.map(d => d.speed)),
+            telemetryData: convertedTelemetryData,
+            maxAltitude: Math.max(...convertedTelemetryData.map(d => d.altitude), 0),
+            maxSpeed: 0, // 속도 데이터 없음 (필요시 나중에 추가)
             status: 'success',
             landingCoords: {
-              lat: recordedData[recordedData.length - 1]?.latitude || 37.5665,
-              lng: recordedData[recordedData.length - 1]?.longitude || 126.9780,
+              lat: convertedTelemetryData[convertedTelemetryData.length - 1]?.latitude || 37.5665,
+              lng: convertedTelemetryData[convertedTelemetryData.length - 1]?.longitude || 126.9780,
             },
           };
 

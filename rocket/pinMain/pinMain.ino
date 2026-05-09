@@ -383,7 +383,7 @@ void loop() {
 
 
 float gravityX, gravityY, gravityZ;
-  mahony0.update(gx_f, gy_f, gz_f, ax_f, ay_f, az_f, mx_f, my_f, mz_f, dt);
+  mahony0.updateIMU(ax_f, ay_f, az_f, gx_f, gy_f, gz_f,  dt);
   mahony0.computeAngles();
    
 // mahony6 객체가 선언되어 있고 update가 완료된 상태여야 함
@@ -406,9 +406,9 @@ const float GYRO_LPF_ALPHA = 0.2f;
 // ... loop() 내부 ..
 
 // 1. 순수 선가속도 추출 (중력 보정)
-float pure_ax = ax_f + 980.665f*gravityX; 
-float pure_ay = ay_f + 980.665f*gravityY;
-float pure_az = az_f - 980.665f*gravityZ; // Z축 중력 제거
+float pure_ax = ax_f + 996.665f*gravityX; 
+float pure_ay = ay_f + 996.665f*gravityY;
+float pure_az = az_f - 996.665f*gravityZ; // Z축 중력 제거
 float accel_magg = sqrt(flightData.imu.ax * flightData.imu.ax + flightData.imu.ay * flightData.imu.ay + flightData.imu.az * flightData.imu.az);
 
 // 2. 가속도 벡터 크기 계산 (정지 판별용)
@@ -531,18 +531,18 @@ if (dt > 0.0f) {
 
        // 디버그 출력
   
-      // Serial.print("Vel:"); Serial.print(total_speed);
-      // Serial.print("accel_mag:"); Serial.print(accel_mag);
-      // // Serial.print("gravityY:"); Serial.print(gravityY);
-      // // Serial.print("gravityZ:"); Serial.print(gravityZ);
-      // Serial.print("Roll:"); Serial.print(flightData.filterRoll);
-      // Serial.print("acccccc:"); Serial.print(accel_magg);
-      // Serial.print("servo1:"); Serial.print(servoDeg1, 2);
-      // Serial.print("servo2:"); Serial.print(servoDeg2, 2);
-      // // Serial.print(F("\tP:")); Serial.print(p_term, 3);
-      // Serial.print("ax:"); Serial.print(pure_ax, 2);
-      // Serial.print("ay:"); Serial.print(pure_ay, 2);
-      // Serial.print("az:"); Serial.println(pure_az, 2);
+      Serial.print("Vel:"); Serial.print(total_speed);
+      Serial.print("accel_mag:"); Serial.print(accel_mag);
+      // Serial.print("gravityY:"); Serial.print(gravityY);
+      // Serial.print("gravityZ:"); Serial.print(gravityZ);
+      Serial.print("Roll:"); Serial.print(flightData.filterRoll);
+      Serial.print("acccccc:"); Serial.print(accel_magg);
+      Serial.print("servo1:"); Serial.print(servoDeg1, 2);
+      Serial.print("servo2:"); Serial.print(servoDeg2, 2);
+      // Serial.print(F("\tP:")); Serial.print(p_term, 3);
+      Serial.print("ax:"); Serial.print(pure_ax, 2);
+      Serial.print("ay:"); Serial.print(pure_ay, 2);
+      Serial.print("az:"); Serial.println(pure_az, 2);
     
   }
   
