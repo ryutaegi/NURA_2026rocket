@@ -9,6 +9,8 @@
 #define PIN_CONNECT_DETECT 2
 Adafruit_Mahony mahony0;
 
+bool launched = false;
+
 // float diff = 0.0f;
 // float prevValue = 0.0f;         // 이전값 저장용
 // const float THRESHOLD = 0.05f;
@@ -407,12 +409,14 @@ const float GYRO_LPF_ALPHA = 0.2f;
 float pure_ax = ax_f + 980.665f*gravityX; 
 float pure_ay = ay_f + 980.665f*gravityY;
 float pure_az = az_f - 980.665f*gravityZ; // Z축 중력 제거
-
+float accel_magg = sqrt(flightData.imu.ax * flightData.imu.ax + flightData.imu.ay * flightData.imu.ay + flightData.imu.az * flightData.imu.az);
 
 // 2. 가속도 벡터 크기 계산 (정지 판별용)
 float accel_mag = sqrt(pure_ax * pure_ax + pure_ay * pure_ay + pure_az * pure_az);
+if(accel_magg > 2000)
+launched = true;
 // 3. 조건부 속도 적분 및 적응형 댐핑
-if (accel_mag>12000.0f) {
+if (!launched) {  
     // [정지 상태] 가속도가 작으면 센서 드리프트로 간주하고 속도를 0으로 강제 수렴
     vel_x *= VEL_DAMPING_STILL; 
     vel_y *= VEL_DAMPING_STILL;
@@ -527,18 +531,18 @@ if (dt > 0.0f) {
 
        // 디버그 출력
   
-      Serial.print("Vel:"); Serial.print(total_speed);
-      // Serial.print("gravityX:"); Serial.print(gravityX);
-      // Serial.print("gravityY:"); Serial.print(gravityY);
-      // Serial.print("gravityZ:"); Serial.print(gravityZ);
-      Serial.print("Roll:"); Serial.print(flightData.filterRoll);
-      // // Serial.print(F("\tGz:")); Serial.print(filtered_gyro_z);
-      Serial.print("servo1:"); Serial.print(servoDeg1, 2);
-      Serial.print("servo2:"); Serial.println(servoDeg2, 2);
-      // Serial.print(F("\tP:")); Serial.print(p_term, 3);
-      Serial.print("ax:"); Serial.print(pure_ax, 2);
-      Serial.print("ay:"); Serial.print(pure_ay, 2);
-      Serial.print("az:"); Serial.println(pure_az, 2);
+      // Serial.print("Vel:"); Serial.print(total_speed);
+      // Serial.print("accel_mag:"); Serial.print(accel_mag);
+      // // Serial.print("gravityY:"); Serial.print(gravityY);
+      // // Serial.print("gravityZ:"); Serial.print(gravityZ);
+      // Serial.print("Roll:"); Serial.print(flightData.filterRoll);
+      // Serial.print("acccccc:"); Serial.print(accel_magg);
+      // Serial.print("servo1:"); Serial.print(servoDeg1, 2);
+      // Serial.print("servo2:"); Serial.print(servoDeg2, 2);
+      // // Serial.print(F("\tP:")); Serial.print(p_term, 3);
+      // Serial.print("ax:"); Serial.print(pure_ax, 2);
+      // Serial.print("ay:"); Serial.print(pure_ay, 2);
+      // Serial.print("az:"); Serial.println(pure_az, 2);
     
   }
   
