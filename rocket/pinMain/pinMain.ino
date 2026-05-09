@@ -381,7 +381,7 @@ void loop() {
 
 
 float gravityX, gravityY, gravityZ;
-  mahony0.updateIMU(gx_f, gy_f, gz_f, ax_f, ay_f, az_f, dt);
+  mahony0.update(gx_f, gy_f, gz_f, ax_f, ay_f, az_f, mx_f, my_f, mz_f, dt);
   mahony0.computeAngles();
    
 // mahony6 객체가 선언되어 있고 update가 완료된 상태여야 함

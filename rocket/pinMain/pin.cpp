@@ -174,13 +174,13 @@ const float NOISE_THRESHOLD = deg2rad(15.0f);
   ay_f = ay;
   az_f = az;
 
-  gx_f += LPF_K * (gx - gx_f);
-  gy_f += LPF_K * (gy - gy_f);
-  gz_f += LPF_K * (gz - gz_f);
+  gx_f = gx;
+  gy_f = gy;
+  gz_f = gz;
 
-  mx_f += LPF_K * (mx - mx_f);
-  my_f += LPF_K * (my - my_f);
-  mz_f += LPF_K * (mz - mz_f);
+  mx_f = mx;
+  my_f = my;
+  mz_f = mz;
 
   imuData.ax = ax;  // 저장소는 m/s^2
   imuData.ay = ay;
