@@ -669,13 +669,13 @@ void loop() {
     bool baroOMG = isOMGbaro(flight.baro);
 
     // 2) ⛔ 센서 고장 시 APOGEE 강제 전이 (여기!)
-    if ((imuOMG || baroOMG) && flight.state < APOGEE) {
-      flight.state = APOGEE;
-      Serial.println("센서 고장");
+    // if ((imuOMG || baroOMG) && flight.state < APOGEE) {
+    //   flight.state = APOGEE;
+    //   Serial.println("센서 고장");
 
-      // 중요: 하강 판단 누적값 리셋(권장)
-      resetDecisionCounters(jc);
-    }
+    //   // 중요: 하강 판단 누적값 리셋(권장)
+    //   resetDecisionCounters(jc);
+    // }
 
   //================== 기본 판단 신호====================
 
