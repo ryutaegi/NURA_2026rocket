@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Volumes/NO NAME/**)",
+      "Bash(ls -lh FL037[0-9].BIN FL038[0-2].BIN)",
+      "Read(//Users/taegi/Documents/NURA_2026rocket/**)",
+      "Bash(ls -1 FL037[0-9].BIN FL038[0-2].BIN)"
+    ]
+  }
+}

@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 # FlightState 매핑(원하면 CSV에 문자열로도 저장 가능)
-FLIGHT_STATE = ["STANDBY", "LAUNCHED", "POWERED", "COASTING", "APOGEE", "DESCENT", "LANDED"]
+FLIGHT_STATE = ["STANDBY", "POWERED", "COASTING", "APOGEE", "DESCENT", "LANDED"]
 
 # FlightData 레이아웃 (packed, little-endian)
 # imu: 6f

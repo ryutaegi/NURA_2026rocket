@@ -47,16 +47,63 @@ export interface RocketTelemetry {
   parachuteEjectReason: number; // 0: 없음, 1: 비상, 2: 고도, 3: 타이머
 }
 
-// 아두이노 FlightState enum에 따른 매핑
+// 아두이노 FlightState enum에 따른 매핑 (STANDBY, POWERED, COASTING, APOGEE, DESCENT, LANDED)
 export const flightPhaseToStageMap: { [key: number]: RocketTelemetry['stage'] } = {
   0: 'pre-launch',    // STANDBY
-  1: 'launch',        // LAUNCHED
-  2: 'powered',       // POWERED
-  3: 'coasting',      // COASTING
-  4: 'apogee',        // APOGEE
-  5: 'descent',       // DESCENT
-  6: 'landed',        // LANDED
+  1: 'launch',        // POWERED
+  2: 'coasting',      // COASTING
+  3: 'apogee',        // APOGEE
+  4: 'descent',       // DESCENT
+  5: 'landed',        // LANDED
 };
+
+// 원본 센서 데이터를 RocketTelemetry 형식으로 변환
+export function convertRawTelemetry(data: any): RocketTelemetry {
+  // 쿼터니안 Q15 디코딩
+  const q1 = data.q1 / 32767.0;
+  const q2 = data.q2 / 32767.0;
+  const q3 = data.q3 / 32767.0;
+  const q0 = Math.sqrt(Math.max(0, 1 - q1 ** 2 - q2 ** 2 - q3 ** 2));
+
+  // flag1 파싱
+  const connectPin = Boolean(data.flag1 & 0x01);
+  const parachute  = Boolean((data.flag1 >> 1) & 0x01);
+  const ejectBtn   = Boolean((data.flag1 >> 2) & 0x01);
+  const soundBtn   = Boolean((data.flag1 >> 3) & 0x01);
+  const sats       = (data.flag1 >> 4) & 0x0F;
+
+  // flag2 파싱
+  const flightPhase    = (data.flag2 >> 5) & 0x07;  // bits 7-5
+  const ejectDescent   = Boolean((data.flag2 >> 3) & 0x01);  // bit 3
+  const ejectTimer     = Boolean((data.flag2 >> 2) & 0x01);  // bit 2
+  const extra1 = false;  // 사용 안 함
+
+  // 낙하산 사출 이유
+  const parachuteEjectReason = ejectBtn ? 1 : ejectDescent ? 2 : ejectTimer ? 3 : 0;
+
+  // roll 스케일링
+  const roll = data.roll - 127;
+
+  return {
+    latitude: data.lat / 1e7,
+    longitude: data.lon / 1e7,
+    altitude: data.alt,
+    q0, q1, q2, q3,
+    roll,
+    temperature: data.temp - 20,
+    sats,
+    soundBtn,
+    ejectBtn,
+    parachute,
+    connectPin,
+    flightPhase,
+    extra1,
+    ejectDescent,
+    ejectTimer,
+    stage: flightPhaseToStageMap[flightPhase] || 'pre-launch',
+    parachuteEjectReason,
+  };
+}
 
 interface MainPageProps {
   centerAlign: boolean;
@@ -381,28 +428,46 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
     if (!isReplayMode || !replayData) return;
     const dataIndex = Math.floor((replayTime / replayData.duration) * replayData.telemetryData.length);
     const currentData = replayData.telemetryData[dataIndex] || replayData.telemetryData[0];
-    setTelemetry({
-      latitude: currentData.latitude,
-      longitude: currentData.longitude,
-      altitude: currentData.altitude,
-      q0: currentData.q0 ?? 1,
-      q1: currentData.q1 ?? 0,
-      q2: currentData.q2 ?? 0,
-      q3: currentData.q3 ?? 0,
-      roll: currentData.roll ?? 0,
-      temperature: currentData.temperature,
-      sats: currentData.sats ?? 0,
-      soundBtn: currentData.soundBtn ?? false,
-      ejectBtn: currentData.ejectBtn ?? false,
-      parachute: currentData.parachute ?? false,
-      connectPin: currentData.connectPin ?? false,
-      flightPhase: currentData.flightPhase ?? 0,
-      extra1: currentData.extra1 ?? false,
-      ejectDescent: currentData.ejectDescent ?? false,
-      ejectTimer: currentData.ejectTimer ?? false,
-      stage: flightPhaseToStageMap[currentData.flightPhase] || 'pre-launch',
-      parachuteEjectReason: currentData.parachuteEjectReason ?? 0,
-    });
+
+    let convertedTelemetry: RocketTelemetry;
+
+    // 원본 양식 데이터 처리
+    if (currentData.lat !== undefined) {
+      // 원본 센서 양식 (lat, lon, q1, q2, q3, flag1, flag2, roll, temp)
+      convertedTelemetry = convertRawTelemetry(currentData);
+    } else {
+      // 이미 변환된 양식 (latitude, longitude, q0, ...)
+      convertedTelemetry = {
+        latitude: currentData.latitude,
+        longitude: currentData.longitude,
+        altitude: currentData.altitude,
+        q0: currentData.q0 ?? 1,
+        q1: currentData.q1 ?? 0,
+        q2: currentData.q2 ?? 0,
+        q3: currentData.q3 ?? 0,
+        roll: currentData.roll ?? 0,
+        temperature: currentData.temperature,
+        sats: currentData.sats ?? 0,
+        soundBtn: currentData.soundBtn ?? false,
+        ejectBtn: currentData.ejectBtn ?? false,
+        parachute: currentData.parachute ?? false,
+        connectPin: currentData.connectPin ?? false,
+        flightPhase: currentData.flightPhase ?? 0,
+        extra1: currentData.extra1 ?? false,
+        ejectDescent: currentData.ejectDescent ?? false,
+        ejectTimer: currentData.ejectTimer ?? false,
+        stage: flightPhaseToStageMap[currentData.flightPhase] || 'pre-launch',
+        parachuteEjectReason: currentData.parachuteEjectReason ?? 0,
+      };
+    }
+
+    setTelemetry(convertedTelemetry);
+
+    // roll 히스토리 업데이트
+    const newEntry = { t: Date.now(), roll: convertedTelemetry.roll };
+    const updated = [...rollHistoryRef.current, newEntry].slice(-ROLL_HISTORY_MAX);
+    rollHistoryRef.current = updated;
+    setRollHistory(updated);
   }, [isReplayMode, replayTime, replayData]);
 
   const handleStartRecording = () => {
