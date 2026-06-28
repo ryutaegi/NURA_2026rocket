@@ -3,7 +3,7 @@
 #include <Adafruit_BMP280.h>
 #include <TinyGPSPlus.h>
 #include <SPI.h>
-#include <SD.h>
+#include <SdFat.h>
 #include <EEPROM.h>
 #include <avr/wdt.h>
 
@@ -32,7 +32,9 @@ static const int SD_CS_PIN = 10;
 const int EEPROM_ADDR_IDX = 0;          // EEPROM에 uint16_t 인덱스 저장 주소
 const uint32_t LOG_PERIOD_MS = 100;      // 10Hz
 const uint32_t FLUSH_PERIOD_MS = 1000;  // 1초
-File logFile;
+// SdFat: FAT32/exFAT 모두 대응하기 위해 SdFs + FsFile 사용
+SdFs sd;
+FsFile logFile;
 
 JudgeCounters jc;
 float prevClimbRate = 0;
@@ -529,7 +531,7 @@ bool openNewLogFile() {
   bool found = false;
   for (uint16_t tries = 0; tries < 10000; tries++) {
     snprintf(name, sizeof(name), "FL%04u.BIN", idx);
-    if (!SD.exists(name)) {
+    if (!sd.exists(name)) {
       found = true;
       break;
     }
@@ -537,7 +539,7 @@ bool openNewLogFile() {
   }
   if (!found) return false;
 
-  logFile = SD.open(name, FILE_WRITE);
+  logFile = sd.open(name, O_WRONLY | O_CREAT | O_EXCL);
   if (!logFile) return false;
 
   writeBootIndex((idx + 1) % 10000);
@@ -585,10 +587,18 @@ void setup() {
     Serial.print("p0_hPa=");
     Serial.println(g_p0_hPa, 2);
   }
-
+  
+pinMode(53, OUTPUT);        // Mega의 하드웨어 SS핀
+pinMode(SD_CS_PIN, OUTPUT); // SD CS핀 = 10번
+digitalWrite(SD_CS_PIN, HIGH);
   // sd
-  if (!SD.begin(SD_CS_PIN)) {
-    Serial.println("SD init failed!");
+  // sd
+  // SdFat 초기화
+  // 64GB 카드는 보통 exFAT이므로 SdFs를 사용함.
+  // 배선이 길거나 초기화가 불안정하면 SD_SCK_MHZ(4) 또는 SD_SCK_MHZ(1)로 낮춰보기.
+  if (!sd.begin(SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(8)))) {
+    Serial.println("SdFat init failed!");
+    sd.initErrorPrint(&Serial);
     while (1)
       ;
   }
@@ -616,13 +626,6 @@ void loop() {
       gps.encode(Serial1.read());
 
   handleLoraRxCommand();  // 지상국 명령 수신
-  // 리셋
-  if(isReset) {
-    sendBtoA_Reset(Serial3, true, millis());
-    isReset=false;
-    delay(500);
-    softwareReset();
-  }
   // // if(Serial2.available())
   // //   Serial.println("asdfasdf");
 
@@ -661,45 +664,41 @@ void loop() {
 
   // ========================센서 이상치 판단==========
 
-  static uint32_t lastJudgeMs = 0;
-  static bool descent = false;
-  if (nowMs - lastJudgeMs >= 100) { 
-    lastJudgeMs = nowMs;
-    bool imuOMG = isOMGimu(flight.imu);
-    bool baroOMG = isOMGbaro(flight.baro);
+  bool imuOMG = isOMGimu(flight.imu);
+  bool baroOMG = isOMGbaro(flight.baro);
 
-    // 2) ⛔ 센서 고장 시 APOGEE 강제 전이 (여기!)
-    // if ((imuOMG || baroOMG) && flight.state < APOGEE) {
-    //   flight.state = APOGEE;
-    //   Serial.println("센서 고장");
+  // 2) ⛔ 센서 고장 시 APOGEE 강제 전이 (여기!)
+  if ((imuOMG || baroOMG) && flight.state < APOGEE) {
+    flight.state = APOGEE;
+    Serial.println("센서 고장");
 
-    //   // 중요: 하강 판단 누적값 리셋(권장)
-    //   resetDecisionCounters(jc);
-    // }
+    // 중요: 하강 판단 누적값 리셋(권장)
+    resetDecisionCounters(jc);
+  }
 
   //================== 기본 판단 신호====================
 
-    bool accelOver = (!imuOMG) && isAccelOver(flight.imu);
+  bool accelOver = (!imuOMG) && isAccelOver(flight.imu);
 
-    bool altitudeUp = (!baroOMG) && isAltitudeUp(flight.baro);      // 상승 증거
-    bool altitudeDown = (!baroOMG) && isAltitudeDown(flight.baro);  // 하강 증거
-    bool powered = isPowered(accelOver, altitudeUp, jc);
-    bool motorOver = isMotorOver(accelOver, jc);
-    bool apogee = isApogee(altitudeUp,jc);
-    descent = (flight.state == APOGEE) && isDescent(altitudeDown, jc);
-    // ========================
+  bool altitudeUp = (!baroOMG) && isAltitudeUp(flight.baro);      // 상승 증거
+  bool altitudeDown = (!baroOMG) && isAltitudeDown(flight.baro);  // 하강 증거
+  bool powered = isPowered(accelOver, altitudeUp, jc);
+  bool motorOver = isMotorOver(powered, jc);
+  bool apogee = (flight.state < APOGEE) && altitudeUp;
+  bool descent = (flight.state == APOGEE) && altitudeDown;
+  // ========================
 
-    // 4) 상태머신 갱신
+  // 4) 상태머신 갱신
 
-    updateFlightState(
-      flight,
-      launchTimeStarted,
-      powered,
-      motorOver,
-      apogee,
-      descent,
-      jc);
-  }
+  updateFlightState(
+    flight,
+    launchTimeStarted,
+    powered,
+    motorOver,
+    apogee,
+    descent,
+    jc);
+
   /*===================== 낙하산 사출 함수=================
       1. 발사 10초 뒤 낙하산 사출
       2. 하강 30회 시 낙하산 사출(데이터 중복 가능성)
@@ -766,6 +765,13 @@ void loop() {
   // //     b2aBurst = false;
   // //   }
   // // }
+  if(isReset) {
+    sendBtoA_Reset(Serial3, true, millis());
+    isReset=false;
+    delay(500);
+    softwareReset();
+  }
+
   // // ========= 낙하산 서보 FSM 실행 ========================
 
    applyParachuteDeployState();
@@ -781,6 +787,8 @@ void loop() {
 
     if (nowMs - lastLog >= LOG_PERIOD_MS) {
       lastLog = nowMs;
+    //       Serial.print("LOG ");
+    // Serial.println(nowMs);
 
       // memcpy(버퍼로 복사) 동안만 인터럽트 잠깐 막아서 레코드 찢김 방지
       sdLogWrite((const void*)&flight, (uint16_t)sizeof(FlightData));
@@ -849,6 +857,15 @@ void loop() {
       Serial.print(flight.gps.longitudeE7);
       Serial.println();
     }
+
+//     static uint32_t cnt = 0;
+
+// cnt++;
+
+// if (millis() % 1000 < 5) {
+//     Serial.println(cnt);
+//     cnt = 0;
+// }
 
   //   static unsigned long lastPrint = 0;
   // if (millis() - lastPrint > 1000) {   // 1초마다 출력

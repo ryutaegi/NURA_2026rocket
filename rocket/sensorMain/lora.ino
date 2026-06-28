@@ -211,14 +211,27 @@ int cmdLen = snprintf(cmd, sizeof(cmd),
 LORA_PORT.write((uint8_t*)cmd, cmdLen);
 }
 
-// Serial2(=LORA_PORT)에서 한 줄씩 받아서 +RCV 파싱
+// Serial2(=LORA_PORT)에서 한 줄씩 받아서 +RCV 파싱 (non-blocking)
 void handleLoraRxCommand() {
+  static char rxBuf[128];
+  static uint8_t rxLen = 0;
+
   while (LORA_PORT.available()) {
-    //Serial.println("Serial2 available!");  // ← 이거 추가
-    String line = LORA_PORT.readStringUntil('\n');
-    //Serial.println(line);
+    char c = (char)LORA_PORT.read();
+    if (c == '\r') continue;
+    if (c != '\n') {
+      if (rxLen < sizeof(rxBuf) - 1) rxBuf[rxLen++] = c;
+      continue;
+    }
+
+    // '\n' 도착 → 한 줄 완성
+    rxBuf[rxLen] = '\0';
+    rxLen = 0;
+
+    String line = String(rxBuf);
     line.trim();
     if (!line.startsWith("+RCV=")) continue;
+
     Serial.println("입력받음");
 
     int p1 = line.indexOf(',');
@@ -229,13 +242,11 @@ void handleLoraRxCommand() {
     String data = line.substring(p2 + 1, p3);
 
     if (data == "E") {
-      if(!g_parachuteDeployed)
-      {
+      if (!g_parachuteDeployed) {
         g_parachuteDeployed = true;
         ejectBtnClicked = true;
         deployCtl.state = DEPLOY_PUNCH;
       }
-      //emergencyDeploy();
       Serial.println("receive EEE");
     }
     if (data == "R") {
