@@ -27,6 +27,7 @@ debugVar(speed);
 
 #define PIN_CONNECT_DETECT 2
 #define PIN_DEPLOY_SERVO 6
+#define PIN_BUZZER 7
 
 static const int SD_CS_PIN = 10;
 const int EEPROM_ADDR_IDX = 0;          // EEPROM에 uint16_t 인덱스 저장 주소
@@ -556,9 +557,73 @@ bool openNewLogFile() {
 
 
 
+// ============================================================================
+// 피에조 부저: 상태별 비프 패턴 (non-blocking)
+// ============================================================================
+struct BuzzStep { uint16_t freq; uint16_t toneDur; uint16_t pauseDur; };
+
+// freq=0 이면 noTone (쉬기)
+static const BuzzStep BUZZ_STANDBY[] = {
+  {880, 100, 1900},   // 단일 삑, 2초마다
+};
+static const BuzzStep BUZZ_POWERED[] = {
+  {2500, 50, 50},     // 빠른 고음 연속
+};
+static const BuzzStep BUZZ_COASTING[] = {
+  {1500, 80, 80},
+  {1500, 80, 260},    // 이중 삑, 500ms마다
+};
+static const BuzzStep BUZZ_APOGEE[] = {
+  {1200, 60, 60},
+  {1200, 60, 60},
+  {1200, 60, 700},    // 3연속 삑, 1초마다
+};
+static const BuzzStep BUZZ_DESCENT[] = {
+  {1000, 80, 60},
+  {600,  80, 180},    // 고→저 이중 삑, 400ms마다
+};
+static const BuzzStep BUZZ_LANDED[] = {
+  {2000, 200, 100},
+  {1000, 200, 100},   // 고저 교차
+};
+
+void updateBuzzer(FlightState state, uint32_t nowMs) {
+  static FlightState lastState = STANDBY;
+  static uint8_t step = 0;
+  static uint32_t nextMs = 0;
+
+  if (state != lastState) {
+    lastState = state;
+    step = 0;
+    nextMs = nowMs;
+    noTone(PIN_BUZZER);
+  }
+
+  if (nowMs < nextMs) return;
+
+  const BuzzStep* pat;
+  uint8_t len;
+  switch (state) {
+    case STANDBY:  pat = BUZZ_STANDBY;  len = 1; break;
+    case POWERED:  pat = BUZZ_POWERED;  len = 1; break;
+    case COASTING: pat = BUZZ_COASTING; len = 2; break;
+    case APOGEE:   pat = BUZZ_APOGEE;   len = 3; break;
+    case DESCENT:  pat = BUZZ_DESCENT;  len = 2; break;
+    case LANDED:   pat = BUZZ_LANDED;   len = 2; break;
+    default: return;
+  }
+
+  const BuzzStep& s = pat[step];
+  tone(PIN_BUZZER, s.freq, s.toneDur);
+  nextMs = nowMs + s.toneDur + s.pauseDur;
+  step = (step + 1) % len;
+}
+
 void setup() {
 
   Serial.begin(115200);
+  pinMode(PIN_BUZZER, OUTPUT);
+
   // A2B 링크: Serial3 (B: RX3=15, TX3=14)
   initLora();
   Serial3.begin(115200);
@@ -626,6 +691,7 @@ void loop() {
       gps.encode(Serial1.read());
 
   handleLoraRxCommand();  // 지상국 명령 수신
+  updateBuzzer(flight.state, nowMs);
   // // if(Serial2.available())
   // //   Serial.println("asdfasdf");
 
