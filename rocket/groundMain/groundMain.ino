@@ -93,27 +93,35 @@ void trim(char* str) {
 // LoRa RX 처리
 // =======================
 void handleLoraRx() {
-  if (!lora.available()) return;
+  static char rxBuf[128];
+  static uint8_t rxLen = 0;
 
-  char line[128];
-  int len = lora.readBytesUntil('\n', line, sizeof(line) - 1);
-  line[len] = '\0';
+  while (lora.available()) {
+    char c = lora.read();
+    if (c == '\r') continue;
+    if (c != '\n') {
+      if (rxLen < sizeof(rxBuf) - 1) rxBuf[rxLen++] = c;
+      continue;
+    }
 
-  trim(line);
+    rxBuf[rxLen] = '\0';
+    rxLen = 0;
 
-  if (strncmp(line, "+RCV=", 5) != 0) return;
+    char* line = rxBuf;
+
+    if (strncmp(line, "+RCV=", 5) != 0) continue;
 
   char* p1 = strchr(line, ',');
-  if (!p1) return;
+  if (!p1) continue;
 
   char* p2 = strchr(p1 + 1, ',');
-  if (!p2) return;
+  if (!p2) continue;
 
   char* p3 = strchr(p2 + 1, ',');
-  if (!p3) return;
+  if (!p3) continue;
 
   int payloadLen = p3 - (p2 + 1);
-  if (payloadLen <= 0 || payloadLen > 100) return;
+  if (payloadLen <= 0 || payloadLen > 100) continue;
 
   char payload[128];
   strncpy(payload, p2 + 1, payloadLen);
@@ -123,77 +131,49 @@ void handleLoraRx() {
   int rawLen = base64Decode(payload, raw);
 
   if (rawLen != 20) {
-    Serial.print("LEN ERROR: ");
-    Serial.println(rawLen);
-    return;
+      Serial.print("LEN ERROR: ");
+      Serial.println(rawLen);
+      continue;
+    }
+
+    if (raw[0] != 0xAA) {
+      Serial.print("SYNC ERROR: ");
+      Serial.println(raw[0], HEX);
+      continue;
+    }
+
+    int idx = 1;
+    FlightDataPacket packet;
+
+    packet.q1 = read16(raw, idx);
+    packet.q2 = read16(raw, idx);
+    packet.q3 = read16(raw, idx);
+
+    packet.lat = read32(raw, idx);
+    packet.lon = read32(raw, idx);
+
+    packet.alt = raw[idx++];
+    packet.temp = raw[idx++];
+    packet.flag1 = raw[idx++];
+    packet.flag2 = raw[idx++];
+
+    if (sound == true) {
+      packet.flag1 |= 0x08;
+      sound = false;
+    } else {
+      packet.flag1 &= ~0x08;
+    }
+
+    packet.roll = raw[idx++];
+
+    packet.checksum = 0;
+    uint8_t* bytes = (uint8_t*)&packet;
+    for (size_t i = 1; i < sizeof(packet) - 1; ++i) {
+      packet.checksum += bytes[i];
+    }
+
+    Serial.write((uint8_t*)&packet, sizeof(packet));
   }
-
-  if (raw[0] != 0xAA) {
-    Serial.print("SYNC ERROR: ");
-    Serial.println(raw[0], HEX);
-    return;
-  }
-
-  int idx = 1;
-  FlightDataPacket packet;
-
-  // q1/q2/q3: Q15 인코딩 (*32767), 2바이트씩
-  packet.q1 = read16(raw, idx);
-  packet.q2 = read16(raw, idx);
-  packet.q3 = read16(raw, idx);
-
-  // lat/lon: int32 E7
-  packet.lat = read32(raw, idx);
-  packet.lon = read32(raw, idx);
-
-  // alt: 1바이트 (0~255m)
-  packet.alt = raw[idx++];
-
-  // temp: 1바이트 (-20 오프셋, 0~120 → -20~100)
-  packet.temp = raw[idx++];
-
-  
-  packet.flag1 = raw[idx++];
-  packet.flag2 = raw[idx++];
-
-
-  // connect (기존 포맷 유지: 위성개수*10 + 커넥트핀, 소리클릭시 +2/+3)
-  if (sound == true) {
-    packet.flag1 |= 0x08; //3번비트 1로 설정
-    sound = false;
-  } else {
-    packet.flag1 &= ~0x08; //3번 비트 0으로 설정 
-  }
-
- 
-
- 
-  // if (ejection == true) {
-  //   packet.flag1 |= 0x40; //2번비트 1로 설정
-  //   ejection = false;
-  // } else {
-  //   packet.flag1 &= ~0x40; // 2번비트 0으로 설정
-  // }
-
-  // 바이트 19: roll값 (0~255 → -180~+180, 로켓 좌표계)
-  packet.roll = raw[idx++];
-
-  
-
-  packet.checksum = 0;
-  uint8_t* bytes = (uint8_t*)&packet;
-  for (size_t i = 1; i < sizeof(packet) - 1; ++i) {
-    packet.checksum += bytes[i];
-  }
-
-//  for(int i = 7; i >= 0; i--) {
-//      Serial.print(bitRead(packet.flag1, i));
-//  }
-// Serial.println(" <- flag1");
-
-// for (int i = 7; i >= 0; i--) Serial.print(bitRead(packet.flag2, i));
-// Serial.println(" <- flag2");
- Serial.write((uint8_t*)&packet, sizeof(packet));
 }
 
 // =======================

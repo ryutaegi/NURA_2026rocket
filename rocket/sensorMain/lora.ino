@@ -9,7 +9,7 @@
 #define LORA_PORT  Serial2
 static const uint32_t LORA_BAUD = 38400;
 static const uint8_t  LORA_ADDR = 0;            // AT+SEND=0,...
-static const uint32_t LORA_PERIOD_MS = 200;     //  송신 hz
+static const uint32_t LORA_PERIOD_MS = 1000;     //  송신 hz
 
 // ======================= base64 =======================
 static const char b64_tbl[] =
@@ -136,6 +136,7 @@ void sendLoraFromFlight(const FlightData& f, bool g_parachuteDeployed, bool pinD
   static uint32_t lastMs = 0;
   uint32_t nowMs = millis();
   if (nowMs - lastMs < LORA_PERIOD_MS) return;
+  if (LORA_PORT.available()) return;
   lastMs = nowMs;
 
   uint8_t buf[20];
