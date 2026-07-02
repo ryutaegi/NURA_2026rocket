@@ -667,7 +667,15 @@ if (dt > 0.0f) {
       Serial.print("ay:"); Serial.print(pure_ay, 2);
       Serial.print("az:"); Serial.println(pure_az, 2);
       Serial.print(" ClimbRate:");
-      Serial.print(ClimbRate, 2);
+Serial.print(ClimbRate, 2);
+
+Serial.print(" Valid:");
+Serial.print(ClimbRateValid ? 1 : 0);
+
+Serial.print(" Age:");
+Serial.print(millis() - ClimbRateRxMs);
+
+Serial.println();
     
   }
   
