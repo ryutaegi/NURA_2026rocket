@@ -662,7 +662,9 @@ if (dt > 0.0f) {
     prevErrorYaw = errorYaw;
 
        // 디버그 출력
-  
+  static uint32_t lastDbg = 0;
+if (nowMs - lastDbg >= 200) {  // 5Hz 정도로 제한
+  lastDbg = nowMs;
       Serial.print("Vel:"); Serial.print(total_speed);
       Serial.print("accel_mag:"); Serial.print(accel_mag);
       // Serial.print("gravityY:"); Serial.print(gravityY);
@@ -728,4 +730,5 @@ Serial.println();
   }
 
 
+}
 }

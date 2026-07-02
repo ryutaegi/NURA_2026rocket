@@ -432,8 +432,6 @@ static const uint8_t B2A_MSG_CLIMBRATE = 0x32;
 static const uint8_t B2A_RESET_LEN = 6;
 static const uint8_t B2A_CLIMB_LEN = 6;
 
-static const uint8_t B2A_MSG_PARACHUTE = B2A_MSG_RESET;
-
 static uint32_t g_lastClimbTxMs = 0;
 static const uint32_t CLIMB_TX_PERIOD_MS = 50;  // 20 Hz
 
@@ -493,6 +491,15 @@ void sendBtoA_Reset(Stream& link, uint32_t nowMs) {
 //  [1] reserved
 //  [2..5] timeMs (uint32_t)  // B보드 기준 타임스탬프
 void sendBtoA_ClimbRate(Stream& link, float climbRate_mps, uint32_t nowMs) {
+  static uint32_t climbTxCount = 0;
+climbTxCount++;
+
+if (climbTxCount % 20 == 0) {
+  Serial.print("CLIMB TX=");
+  Serial.print(climbTxCount);
+  Serial.print("  value=");
+  Serial.println(climbRate_mps, 2);
+}
   // 송신 범위: -327.67 ~ +327.67 m/s
   climbRate_mps = constrain(climbRate_mps, -327.67f, 327.67f);
 
