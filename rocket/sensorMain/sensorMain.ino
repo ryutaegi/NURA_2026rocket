@@ -115,8 +115,8 @@ bool initBaro() {
     Adafruit_BMP280::MODE_NORMAL,
     Adafruit_BMP280::SAMPLING_X2,
     Adafruit_BMP280::SAMPLING_X16,
-    Adafruit_BMP280::FILTER_X16,
-    Adafruit_BMP280::STANDBY_MS_63);
+    Adafruit_BMP280::FILTER_X4,
+    Adafruit_BMP280::STANDBY_MS_1);
   return true;
 }
 
@@ -297,6 +297,9 @@ static inline uint16_t rd_u16_le(const uint8_t* p) {
 static inline int16_t rd_i16_le(const uint8_t* p) {
   return (int16_t)rd_u16_le(p);
 }
+static inline void wr_i16_le(uint8_t* p, int16_t v) {
+  wr_u16_le(p, (uint16_t)v);
+}
 static inline uint32_t rd_u32_le(const uint8_t* p) {
   return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
@@ -424,13 +427,21 @@ void parseAtoB(Stream& link, FlightData& f, uint32_t nowB_ms) {
 static const uint8_t B2A_SYNC1 = 0xB5;
 static const uint8_t B2A_SYNC2 = 0x5B;
 static const uint8_t B2A_VER   = 1;
-static const uint8_t B2A_MSG   = 0x31;   // parachute status message
-static const uint8_t B2A_LEN   = 6;      // payload length
+static const uint8_t B2A_MSG_RESET     = 0x31;  // 기존 원격 리셋
+static const uint8_t B2A_MSG_CLIMBRATE = 0x32;
+static const uint8_t B2A_RESET_LEN = 6;
+static const uint8_t B2A_CLIMB_LEN = 6;
+
+static const uint8_t B2A_MSG_PARACHUTE = B2A_MSG_RESET;
+
+static uint32_t g_lastClimbTxMs = 0;
+static const uint32_t CLIMB_TX_PERIOD_MS = 50;  // 20 Hz
 
 static inline void wr_u16_le(uint8_t* p, uint16_t v) {
   p[0] = (uint8_t)(v & 0xFF);
   p[1] = (uint8_t)((v >> 8) & 0xFF);
 }
+
 static inline void wr_u32_le(uint8_t* p, uint32_t v) {
   p[0] = (uint8_t)(v & 0xFF);
   p[1] = (uint8_t)((v >> 8) & 0xFF);
@@ -438,37 +449,94 @@ static inline void wr_u32_le(uint8_t* p, uint32_t v) {
   p[3] = (uint8_t)((v >> 24) & 0xFF);
 }
 
-// payload (6B):
-//  [0] deployed(1: true / 0: false)
-//  [1] reserved
-//  [2..5] timeMs (uint32_t)  // B보드 기준 타임스탬프
-void sendBtoA_Reset(Stream& link, bool deployed, uint32_t nowMs) {
-  uint8_t hdr[5];                 // VER(1) MSG(1) LEN(1) reserved(2) = 5
-  uint8_t payload[B2A_LEN];
-  uint8_t crcBuf[5 + B2A_LEN];
-
+void sendBtoA_Reset(Stream& link, uint32_t nowMs) {
+  // Header:
+  // VER(1), MSG(1), LEN(1), reserved(2)
+  uint8_t hdr[5];
   hdr[0] = B2A_VER;
-  hdr[1] = B2A_MSG;
-  hdr[2] = B2A_LEN;
+  hdr[1] = B2A_MSG_RESET;
+  hdr[2] = B2A_RESET_LEN;
   hdr[3] = 0;
   hdr[4] = 0;
 
-  payload[0] = deployed ? 1 : 0;
-  payload[1] = 0;
-  wr_u32_le(&payload[2], nowMs);
+  // payload[0] = 1 이면 핀보드 소프트웨어 리셋
+  // payload[1] = 예약
+  // payload[2..5] = 센서보드 timestamp
+  uint8_t payload[B2A_RESET_LEN];
 
-  memcpy(crcBuf, hdr, sizeof(hdr));
-  memcpy(crcBuf + sizeof(hdr), payload, sizeof(payload));
+  payload[0] = 1;
+  payload[1] = 0;
+
+  payload[2] = (uint8_t)(nowMs & 0xFF);
+  payload[3] = (uint8_t)((nowMs >> 8) & 0xFF);
+  payload[4] = (uint8_t)((nowMs >> 16) & 0xFF);
+  payload[5] = (uint8_t)((nowMs >> 24) & 0xFF);
+
+  uint8_t crcBuf[5 + B2A_RESET_LEN];
+
+  memcpy(crcBuf, hdr, 5);
+  memcpy(crcBuf + 5, payload, B2A_RESET_LEN);
 
   uint16_t crc = crc16_ccitt(crcBuf, sizeof(crcBuf));
-  uint8_t crcLe[2];
-  wr_u16_le(crcLe, crc);
 
   link.write(B2A_SYNC1);
   link.write(B2A_SYNC2);
   link.write(hdr, sizeof(hdr));
   link.write(payload, sizeof(payload));
-  link.write(crcLe, 2);
+
+  link.write((uint8_t)(crc & 0xFF));
+  link.write((uint8_t)((crc >> 8) & 0xFF));
+}
+
+// payload (6B):
+//  [0] deployed(1: true / 0: false)
+//  [1] reserved
+//  [2..5] timeMs (uint32_t)  // B보드 기준 타임스탬프
+void sendBtoA_ClimbRate(Stream& link, float climbRate_mps, uint32_t nowMs) {
+  // 송신 범위: -327.67 ~ +327.67 m/s
+  climbRate_mps = constrain(climbRate_mps, -327.67f, 327.67f);
+
+  // m/s -> m/s × 100 정수
+  int16_t climbRateX100 = (int16_t)lroundf(climbRate_mps * 100.0f);
+
+  // Header:
+  // VER(1), MSG(1), LEN(1), reserved(2)
+  uint8_t hdr[5];
+  hdr[0] = B2A_VER;
+  hdr[1] = B2A_MSG_CLIMBRATE;
+  hdr[2] = B2A_CLIMB_LEN;
+  hdr[3] = 0;
+  hdr[4] = 0;
+
+  // Payload:
+  // [0..1] climbRate × 100, int16
+  // [2..5] timestamp, uint32
+  uint8_t payload[B2A_CLIMB_LEN];
+
+  wr_i16_le(&payload[0], climbRateX100);
+
+  payload[2] = (uint8_t)(nowMs & 0xFF);
+  payload[3] = (uint8_t)((nowMs >> 8) & 0xFF);
+  payload[4] = (uint8_t)((nowMs >> 16) & 0xFF);
+  payload[5] = (uint8_t)((nowMs >> 24) & 0xFF);
+
+  // CRC 대상: header + payload
+  uint8_t crcBuf[5 + B2A_CLIMB_LEN];
+
+  memcpy(crcBuf, hdr, 5);
+  memcpy(crcBuf + 5, payload, B2A_CLIMB_LEN);
+
+  uint16_t crc = crc16_ccitt(crcBuf, sizeof(crcBuf));
+
+  // 실제 송신
+  link.write(B2A_SYNC1);
+  link.write(B2A_SYNC2);
+  link.write(hdr, sizeof(hdr));
+  link.write(payload, sizeof(payload));
+
+  // CRC little-endian
+  link.write((uint8_t)(crc & 0xFF));
+  link.write((uint8_t)((crc >> 8) & 0xFF));
 }
 
 
@@ -701,13 +769,17 @@ void loop() {
   // // 2) 센서 갱신
    updateBaro(flight, nowMs);
    updateGps(flight, nowMs);
-  // //Serial2.print("AT+SEND=1,1,1");
 
-  // // if(Serial2.available())
-  // // Serial.write(Serial2.read());
-  // // if(Serial.available())
-  // // Serial2.write(Serial.read());
+// BMP280 상승률을 핀보드로 20 Hz 전송
+if (nowMs - g_lastClimbTxMs >= CLIMB_TX_PERIOD_MS) {
+  g_lastClimbTxMs = nowMs;
 
+  sendBtoA_ClimbRate(
+    Serial3,
+    flight.baro.climbRate,
+    nowMs
+  );
+}
    sendLoraFromFlight(flight, g_parachuteDeployed, pinDetached, ejectBtnClicked, extra1, chuteByDescent, chuteByTimer);
 
   if (!pinDetached) {
@@ -832,7 +904,7 @@ void loop() {
   // //   }
   // // }
   if(isReset) {
-    sendBtoA_Reset(Serial3, true, millis());
+    sendBtoA_Reset(Serial3, nowMs);
     isReset=false;
     delay(500);
     softwareReset();

@@ -153,66 +153,187 @@ void softwareReset() {
   while (1) {}            // 대기 → WDT 트리거
 }
 
-// ===== B -> A reset status receiver =====    리셋 유무 받음
+// ============================================================
+// B보드 -> 핀보드 수신
+// ============================================================
+
 static const uint8_t B2A_SYNC1 = 0xB5;
 static const uint8_t B2A_SYNC2 = 0x5B;
 static const uint8_t B2A_VER   = 1;
-static const uint8_t B2A_MSG   = 0x31;
-static const uint8_t B2A_LEN   = 6;
 
-void pollB2A(Stream& link) {
-  enum { WAIT_S1, WAIT_S2, READ_HDR, READ_PAYLOAD } static st = WAIT_S1;
+// B보드 메시지 종류
+static const uint8_t B2A_MSG_RESET     = 0x31;  // 원격 리셋
+static const uint8_t B2A_MSG_CLIMBRATE = 0x32;  // 기압 기반 상승률
+
+static const uint8_t B2A_MAX_LEN = 16;
+
+
+// ============================================================
+// B보드에서 수신한 기압 기반 상승률
+// ============================================================
+
+// 단위: m/s
+// 상승 중 +, 하강 중 -
+float ClimbRate = 0.0f;
+
+// 정상 상승률 패킷을 마지막으로 받은 시각
+uint32_t ClimbRateRxMs = 0;
+
+// B보드가 패킷에 넣어 보낸 시간
+uint32_t ClimbRateTimeMs = 0;
+
+// 상승률 패킷 정상 수신 여부
+bool ClimbRateValid = false;
+
+
+// ============================================================
+// Little-endian 읽기 함수
+// ============================================================
+
+static inline uint16_t rd_u16_le(const uint8_t* p) {
+  return (uint16_t)p[0]
+       | ((uint16_t)p[1] << 8);
+}
+
+static inline int16_t rd_i16_le(const uint8_t* p) {
+  return (int16_t)rd_u16_le(p);
+}
+
+static inline uint32_t rd_u32_le(const uint8_t* p) {
+  return (uint32_t)p[0]
+       | ((uint32_t)p[1] << 8)
+       | ((uint32_t)p[2] << 16)
+       | ((uint32_t)p[3] << 24);
+}
+
+
+// ============================================================
+// B보드 수신 파서
+//
+// B보드 패킷 형식:
+// [0]      0xB5
+// [1]      0x5B
+// [2]      VER
+// [3]      MSG
+// [4]      LEN
+// [5]      reserved
+// [6]      reserved
+// [...]    payload
+// [마지막 2바이트] CRC16
+// ============================================================
+
+void pollB2A(Stream& link, uint32_t nowMs) {
+  enum ParseState {
+    WAIT_SYNC1,
+    WAIT_SYNC2,
+    READ_HEADER,
+    READ_PAYLOAD,
+    READ_CRC
+  };
+
+  static ParseState state = WAIT_SYNC1;
 
   static uint8_t hdr[5];
-  static uint8_t payload[B2A_LEN];
+  static uint8_t payload[B2A_MAX_LEN];
   static uint8_t crcBytes[2];
-  static uint8_t idx = 0;
+
+  static uint8_t hdrIdx = 0;
+  static uint8_t payloadIdx = 0;
+  static uint8_t payloadLen = 0;
+  static uint8_t crcIdx = 0;
 
   while (link.available()) {
-    uint8_t b = link.read();
+    uint8_t b = (uint8_t)link.read();
 
-    switch (st) {
-      case WAIT_S1:
-        if (b == B2A_SYNC1) st = WAIT_S2;
+    switch (state) {
+
+      case WAIT_SYNC1:
+        if (b == B2A_SYNC1) {
+          state = WAIT_SYNC2;
+        }
         break;
 
-      case WAIT_S2:
+      case WAIT_SYNC2:
         if (b == B2A_SYNC2) {
-          st = READ_HDR;
-          idx = 0;
-        } else st = WAIT_S1;
+          hdrIdx = 0;
+          state = READ_HEADER;
+        } else {
+          state = WAIT_SYNC1;
+        }
         break;
 
-      case READ_HDR:
-        hdr[idx++] = b;
-        if (idx >= 5) {
-          if (hdr[0] != B2A_VER || hdr[1] != B2A_MSG || hdr[2] != B2A_LEN) {
-            st = WAIT_S1;
+      case READ_HEADER:
+        hdr[hdrIdx++] = b;
+
+        if (hdrIdx >= 5) {
+          uint8_t version = hdr[0];
+          uint8_t len = hdr[2];
+
+          if (version != B2A_VER || len > B2A_MAX_LEN) {
+            state = WAIT_SYNC1;
             break;
           }
-          idx = 0;
-          st = READ_PAYLOAD;
+
+          payloadLen = len;
+          payloadIdx = 0;
+          crcIdx = 0;
+
+          state = (payloadLen == 0) ? READ_CRC : READ_PAYLOAD;
         }
         break;
 
       case READ_PAYLOAD:
-        if (idx < B2A_LEN) {
-          payload[idx++] = b;
-        } else if (idx < B2A_LEN + 2) {
-          crcBytes[idx - B2A_LEN] = b;
-          idx++;
+        payload[payloadIdx++] = b;
+
+        if (payloadIdx >= payloadLen) {
+          crcIdx = 0;
+          state = READ_CRC;
         }
+        break;
 
-        if (idx >= B2A_LEN + 2) {
-          // ⚠ CRC 생략 버전 (디버깅용)
-          if(payload[0] == 1)
-            softwareReset();
+      case READ_CRC:
+        crcBytes[crcIdx++] = b;
 
+        if (crcIdx >= 2) {
+          uint8_t crcBuf[5 + B2A_MAX_LEN];
 
-          Serial.print("RECV B->A parachute=");
-         
+          memcpy(crcBuf, hdr, 5);
+          memcpy(crcBuf + 5, payload, payloadLen);
 
-          st = WAIT_S1;
+          uint16_t crcCalc = crc16_ccitt(crcBuf, 5 + payloadLen);
+          uint16_t crcRecv = rd_u16_le(crcBytes);
+
+          if (crcCalc == crcRecv) {
+            uint8_t msg = hdr[1];
+
+            // ------------------------------------------------
+            // 0x31: 기존 원격 리셋 명령
+            // ------------------------------------------------
+            if (msg == B2A_MSG_RESET) {
+              if (payloadLen >= 1 && payload[0] == 1) {
+                softwareReset();
+              }
+            }
+
+            // ------------------------------------------------
+            // 0x32: 상승률 수신
+            //
+            // payload[0..1] = ClimbRate × 100, int16_t
+            // payload[2..5] = B보드 timestamp, uint32_t
+            // ------------------------------------------------
+            else if (msg == B2A_MSG_CLIMBRATE && payloadLen == 6) {
+              int16_t climbRateX100 = rd_i16_le(&payload[0]);
+
+              // 예: 1234 → 12.34 m/s
+              ClimbRate = climbRateX100 / 100.0f;
+
+              ClimbRateTimeMs = rd_u32_le(&payload[2]);
+              ClimbRateRxMs = nowMs;
+              ClimbRateValid = true;
+            }
+          }
+
+          state = WAIT_SYNC1;
         }
         break;
     }
@@ -272,7 +393,9 @@ void setup() {
 }
 
 void loop() {
-  pollB2A(Serial3);
+  uint32_t nowMs = millis();
+
+  pollB2A(Serial3, nowMs);
   // ================= IMU 자동 복구 =================
   
   //  데이터 읽기 시도
@@ -543,6 +666,8 @@ if (dt > 0.0f) {
       Serial.print("ax:"); Serial.print(pure_ax, 2);
       Serial.print("ay:"); Serial.print(pure_ay, 2);
       Serial.print("az:"); Serial.println(pure_az, 2);
+      Serial.print(" ClimbRate:");
+      Serial.print(ClimbRate, 2);
     
   }
   
