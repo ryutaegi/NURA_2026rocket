@@ -164,7 +164,10 @@ static const uint8_t B2A_VER   = 1;
 // B보드 메시지 종류
 static const uint8_t B2A_MSG_RESET     = 0x31;  // 원격 리셋
 static const uint8_t B2A_MSG_CLIMBRATE = 0x32;  // 기압 기반 상승률
-
+uint32_t B2A_rxByteCount = 0;
+uint32_t B2A_crcFailCount = 0;
+uint32_t B2A_climbPacketCount = 0;
+uint32_t B2A_resetPacketCount = 0;
 static const uint8_t B2A_MAX_LEN = 16;
 
 
@@ -244,6 +247,7 @@ void pollB2A(Stream& link, uint32_t nowMs) {
 
   while (link.available()) {
     uint8_t b = (uint8_t)link.read();
+    B2A_rxByteCount++;
 
     switch (state) {
 
@@ -310,10 +314,10 @@ void pollB2A(Stream& link, uint32_t nowMs) {
             // 0x31: 기존 원격 리셋 명령
             // ------------------------------------------------
             if (msg == B2A_MSG_RESET) {
-              if (payloadLen >= 1 && payload[0] == 1) {
-                softwareReset();
-              }
-            }
+            if (payloadLen >= 1 && payload[0] == 1) {
+            softwareReset();
+         }
+        }
 
             // ------------------------------------------------
             // 0x32: 상승률 수신
@@ -322,6 +326,7 @@ void pollB2A(Stream& link, uint32_t nowMs) {
             // payload[2..5] = B보드 timestamp, uint32_t
             // ------------------------------------------------
             else if (msg == B2A_MSG_CLIMBRATE && payloadLen == 6) {
+              B2A_climbPacketCount++;
               int16_t climbRateX100 = rd_i16_le(&payload[0]);
 
               // 예: 1234 → 12.34 m/s
@@ -332,6 +337,10 @@ void pollB2A(Stream& link, uint32_t nowMs) {
               ClimbRateValid = true;
             }
           }
+          else {
+  B2A_crcFailCount++;
+}
+          
 
           state = WAIT_SYNC1;
         }
@@ -671,6 +680,15 @@ Serial.print(ClimbRate, 2);
 
 Serial.print(" Valid:");
 Serial.print(ClimbRateValid ? 1 : 0);
+
+Serial.print(" RXbytes:");
+Serial.print(B2A_rxByteCount);
+
+Serial.print(" ClimbPkt:");
+Serial.print(B2A_climbPacketCount);
+
+Serial.print(" CRCfail:");
+Serial.print(B2A_crcFailCount);
 
 Serial.print(" Age:");
 Serial.print(millis() - ClimbRateRxMs);
