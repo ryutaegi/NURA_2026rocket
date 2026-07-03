@@ -586,12 +586,11 @@ void loop() {
       prevErrorYaw = errorYaw;
 
       // ================= 디버그 출력 =================
-      Serial.print("11:");Serial.print(-10);Serial.print(",");Serial.print("12:");Serial.print(-10);Serial.print(",");
-      
-      Serial.print("Vel:");   Serial.print(vel_ez / 100, 2);  
-      
-      Serial.print("\taez:"); Serial.print(aez, 2);       
-      Serial.print("ClimbRate:"); Serial.println(ClimbRate, 2);          
+       Serial.print("Veltotal:");   Serial.print(flightData.veltotal / 100, 2);  // m/s (3축 벡터 크기)
+      Serial.print("Velimu:");   Serial.print(flightData.velimu / 100, 2);
+      Serial.print("servoDeg1:");  Serial.print(servoDeg1); 
+      Serial.print("servoDeg2:");  Serial.print(servoDeg2);  
+      Serial.print("filterRoll:");  Serial.println(flightData.filterRoll);              
     }
   }
 
