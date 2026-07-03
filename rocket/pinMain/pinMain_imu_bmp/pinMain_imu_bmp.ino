@@ -73,7 +73,7 @@ static const uint8_t SYNC1 = 0xA5;
 static const uint8_t SYNC2 = 0x5A;
 static const uint8_t VER   = 1;
 static const uint8_t MSG   = 0x21;
-static const uint8_t LEN   = 20;
+static const uint8_t LEN   = 24;
 
 static uint16_t g_seq = 0;
 
@@ -142,6 +142,10 @@ void sendAtoB() {
   push_i16_le(buf, idx, s16_scale(flightData.filterRoll, 100.0f));
   push_i16_le(buf, idx, s16_scale(flightData.pitch,      32767.0f));
   push_i16_le(buf, idx, s16_scale(flightData.yaw,        32767.0f));
+
+  // vertical velocity: cm/s 그대로 전송
+  push_i16_le(buf, idx, s16_scale(flightData.veltotal, 1.0f));
+  push_i16_le(buf, idx, s16_scale(flightData.velimu,   1.0f));
 
   // CRC over [VER..PAYLOAD]
   uint16_t crc = crc16_ccitt(&buf[2], (size_t)(idx - 2));
