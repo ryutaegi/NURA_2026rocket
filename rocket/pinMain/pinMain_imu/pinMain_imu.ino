@@ -451,7 +451,8 @@ void loop() {
 
     // 4. 3축 속도 벡터 크기 = 로켓 속력
     float total_speed = sqrt(vel_ex*vel_ex + vel_ey*vel_ey + vel_ez*vel_ez);
-
+    flightData.veltotal = total_speed;
+    flightData.velimu = total_speed;
 
     // ================= 롤 제어 =================
     if (dt > 0.0f) {

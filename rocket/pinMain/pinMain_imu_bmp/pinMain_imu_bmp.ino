@@ -537,7 +537,8 @@ void loop() {
 
     // 4. 3축 속도 벡터 크기
     float total_speed = sqrt(vel_ex*vel_ex + vel_ey*vel_ey + vel_ez*vel_ez);
-
+    flightData.veltotal = vel_ez;
+    flightData.velimu =vel_ez + aez * dtt;
     // ================= 롤 제어 =================
     if (dt > 0.0f) {
       float yaw_deg = wrap720_deg(flightData.filterRoll);  
@@ -558,11 +559,11 @@ void loop() {
       float current_gz = flightData.imu.gz;
       filtered_gyro_z = (GYRO_LPF_ALPHA * current_gz) + (1.0f - GYRO_LPF_ALPHA) * filtered_gyro_z;
 
-      float authority = (total_speed - V_CONTROL_START) / (V_CONTROL_FULL - V_CONTROL_START);
+      float authority = (vel_ez - V_CONTROL_START) / (V_CONTROL_FULL - V_CONTROL_START);
       authority = constrain(authority, 0.0f, 1.0f);
 
       float kp = 0.0f, kd = 0.0f;
-      getKPKD(total_speed, kp, kd);
+      getKPKD(vel_ez, kp, kd);
 
       float p_term = kp * p_error;
       float d_term = kd * (-filtered_gyro_z);
@@ -581,10 +582,10 @@ void loop() {
       prevErrorYaw = errorYaw;
 
       // ================= 디버그 출력 =================
-      Serial.print("Vel:");   Serial.print(total_speed / 100, 2);  
-      Serial.print("\tvx:");  Serial.print(vel_ex / 100, 2);       
-      Serial.print("\tvy:");  Serial.print(vel_ey / 100, 2);       
-      Serial.print("\tvz:");  Serial.print(vel_ez / 100, 2);       
+      Serial.print("11:");Serial.print(-10);Serial.print(",");Serial.print("12:");Serial.print(-10);Serial.print(",");
+      
+      Serial.print("Vel:");   Serial.print(vel_ez / 100, 2);  
+      
       Serial.print("\taez:"); Serial.print(aez, 2);       
       Serial.print("ClimbRate:"); Serial.println(ClimbRate, 2);          
     }
