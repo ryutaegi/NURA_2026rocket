@@ -131,8 +131,8 @@ static inline float MAG_Z() {
 void getKPKD(float vel, float& kp, float& kd) {
   const float V_BASE = 2000.0f;
 
-  const float KP_BASE = 2.7958f;
-  const float KD_BASE = 0.3371f;
+  const float KP_BASE = 2.7635f;
+  const float KD_BASE = 2.4571f;
 
   if (vel <= 100.0f) {
     vel = 1.0f;
