@@ -533,7 +533,7 @@ void loop() {
       vel_ey += aey * dtt;
 
       // Z축: IMU 가속도와 기압계(BMP280) 데이터 상보 필터 융합
-      const float ALPHA_Z = 0.98f; // 필터 계수 (필요시 0.95 ~ 0.99 튜닝)
+      const float ALPHA_Z = 0.999f; // 필터 계수 (필요시 0.95 ~ 0.99 튜닝)
       float baro_vz = ClimbRate * 100.0f; // m/s를 cm/s로 단위 통일
 
       vel_ez = ALPHA_Z * (vel_ez + aez * dtt) + (1.0f - ALPHA_Z) * baro_vz;
