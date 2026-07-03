@@ -66,11 +66,29 @@ static uint32_t g_baro_lastMs = 0;          // 마지막으로 updateBaro()가 �
 // 상대고도 기준압 p0 (발사대에서 평균낸 압력)
 static float g_p0_hPa = 1013.25f;  // 기준 압력 p0
 
-// climbRate 계산
-static float g_alt_prev = 0.0f;         // 직전고도값
-static uint32_t g_alt_prevMs = 0;       // 직전고도측정했던시간
-static float g_climb_filt = 0.0f;       // LPFT쓴 필터 상태값
-static const float CLIMB_ALPHA = 0.2f;  // LPF 알파값
+// ==================== 고도 / 상승률 필터 설정 ====================
+
+// 고도 LPF:
+// 0에 가까울수록 매우 부드럽지만 늦음
+// 1에 가까울수록 빠르지만 튐
+// 0.55는 새 측정값을 55% 반영하는 비교적 빠른 세팅
+static const float ALT_ALPHA = 0.55f;
+
+// 최근 5개 고도값 사용
+// BARO_PERIOD_MS = 50ms이면 약 0.20초 구간의 평균 기울기로 속도 계산
+static const uint8_t VEL_WINDOW = 5;
+
+static bool g_altInitialized = false;
+static float g_altFiltered = 0.0f;
+
+static float g_altHistory[VEL_WINDOW];
+static uint32_t g_timeHistory[VEL_WINDOW];
+
+static uint8_t g_histHead = 0;   // 다음에 덮어쓸 위치
+static uint8_t g_histCount = 0;  // 현재 저장된 샘플 수
+
+static float g_climbFilt = 0.0f;
+static const float CLIMB_ALPHA = 0.60f;
 
 static bool isValidPressure_hPa(float p) {
   return (p >= 300.0f && p <= 1100.0f);
@@ -114,8 +132,8 @@ bool initBaro() {
   bmp.setSampling(  // BMP280 내부 설정값
     Adafruit_BMP280::MODE_NORMAL,
     Adafruit_BMP280::SAMPLING_X2,
-    Adafruit_BMP280::SAMPLING_X16,
-    Adafruit_BMP280::FILTER_X4,
+    Adafruit_BMP280::SAMPLING_X8,
+    Adafruit_BMP280::FILTER_X2,
     Adafruit_BMP280::STANDBY_MS_1);
   return true;
 }
@@ -137,34 +155,79 @@ void calibrateBaroP0(uint32_t calibMs = 3000) {
   if (n > 10) g_p0_hPa = (float)(sum / (double)n);
 }
 
+void pushFilteredAltitude(float alt_m, uint32_t nowMs) {
+  g_altHistory[g_histHead] = alt_m;
+  g_timeHistory[g_histHead] = nowMs;
+
+  g_histHead = (g_histHead + 1) % VEL_WINDOW;
+
+  if (g_histCount < VEL_WINDOW) {
+    g_histCount++;
+  }
+}
+
+float calculateClimbRateFromHistory() {
+  if (g_histCount < VEL_WINDOW) return 0.0f;
+
+  uint8_t oldest = g_histHead;
+  uint8_t newest = (g_histHead + VEL_WINDOW - 1) % VEL_WINDOW;
+
+  float dh = g_altHistory[newest] - g_altHistory[oldest];
+  float dt = (g_timeHistory[newest] - g_timeHistory[oldest]) * 0.001f;
+
+  if (dt < 0.10f || dt > 0.50f) return 0.0f;
+
+  return dh / dt;
+}
+
 void updateBaro(FlightData& f, uint32_t nowMs) {
-  if (nowMs - g_baro_lastMs < BARO_PERIOD_MS) return;  // 주기 유지(20Hz)
-  g_baro_lastMs = nowMs;                               // 마지막 실행시간 갱신
+  if (nowMs - g_baro_lastMs < BARO_PERIOD_MS) return;
+  g_baro_lastMs = nowMs;
 
   prevClimbRate = f.baro.climbRate;
+
   float tempC = bmp.readTemperature();
   float press_hPa = bmp.readPressure() / 100.0f;
-  if (!isValidPressure_hPa(press_hPa)) return;  // 이상치 스킵
 
-  float alt_m = altitudeFromPressure(press_hPa, g_p0_hPa);  // 고도계산
+  if (!isValidPressure_hPa(press_hPa)) return;
 
-  // 상승률 계산 + 1차 LPF
-  float climb = f.baro.climbRate;
-  if (g_alt_prevMs != 0) {
-    float dt = (nowMs - g_alt_prevMs) / 1000.0f;                               // s로 변환
-    if (dt > 0.005f) {                                                         // 최소 dt값(5ms)
-      float raw = (alt_m - g_alt_prev) / dt;                                   // 상승률
-      g_climb_filt = (1.0f - CLIMB_ALPHA) * g_climb_filt + CLIMB_ALPHA * raw;  // LPF적용
-      climb = g_climb_filt;
-    }
+  // 1) 압력 → 원시 상대고도
+  float altRaw_m = altitudeFromPressure(press_hPa, g_p0_hPa);
+
+  // 2) 고도 LPF
+  if (!g_altInitialized) {
+    g_altFiltered = altRaw_m;
+    g_altInitialized = true;
+  } else {
+    g_altFiltered =
+      (1.0f - ALT_ALPHA) * g_altFiltered +
+      ALT_ALPHA * altRaw_m;
   }
-  g_alt_prev = alt_m;    // 현재고도 저장
-  g_alt_prevMs = nowMs;  // 현재시간 저장
-                         // 구조체에 저장
+
+  // 3) 최근 필터 고도값 저장
+  pushFilteredAltitude(g_altFiltered, nowMs);
+
+  // 4) 약 0.2초 구간의 고도 변화량으로 상승률 계산
+  float climbWindow = calculateClimbRateFromHistory();
+
+  if (g_histCount < VEL_WINDOW) {
+  g_climbFilt = 0.0f;
+  } else {
+  g_climbFilt =
+    (1.0f - CLIMB_ALPHA) * g_climbFilt +
+    CLIMB_ALPHA * climbWindow;
+}
+
+float climb = g_climbFilt;
+
+  // 구조체 저장
   f.baro.temperature = tempC;
   f.baro.pressure = press_hPa;
-  f.baro.altitude = alt_m;
+
+  // 낙하산 판단과 SD 로그에는 필터된 고도를 사용
+  f.baro.altitude = g_altFiltered;
   f.baro.climbRate = climb;
+
   f.baroTimeMs = nowMs;
 }
 
@@ -494,12 +557,12 @@ void sendBtoA_ClimbRate(Stream& link, float climbRate_mps, uint32_t nowMs) {
   static uint32_t climbTxCount = 0;
 climbTxCount++;
 
-if (climbTxCount % 20 == 0) {
-  Serial.print("CLIMB TX=");
-  Serial.print(climbTxCount);
-  Serial.print("  value=");
-  Serial.println(climbRate_mps, 2);
-}
+// if (climbTxCount % 20 == 0) {
+//   Serial.print("CLIMB TX=");
+//   Serial.print(climbTxCount);
+//   Serial.print("  value=");
+//   Serial.println(climbRate_mps, 2);
+// }
   // 송신 범위: -327.67 ~ +327.67 m/s
   climbRate_mps = constrain(climbRate_mps, -327.67f, 327.67f);
 
@@ -787,6 +850,8 @@ if (nowMs - g_lastClimbTxMs >= CLIMB_TX_PERIOD_MS) {
     nowMs
   );
 }
+
+
    sendLoraFromFlight(flight, g_parachuteDeployed, pinDetached, ejectBtnClicked, extra1, chuteByDescent, chuteByTimer);
 
   if (!pinDetached) {
@@ -947,61 +1012,90 @@ if (nowMs - g_lastClimbTxMs >= CLIMB_TX_PERIOD_MS) {
     }
 
   
+  // ==================== Serial Plotter용 출력 ====================
+// Arduino IDE 상단 메뉴:
+// Tools -> Serial Plotter
+// Baud rate: 115200
 
-    if (nowMs - lastDebugPrint >= 1000) {
-      lastDebugPrint = nowMs;
+static uint32_t lastPlotMs = 0;
 
-      uint32_t ageA = (flight.aRxTimeMs == 0) ? 0xFFFFFFFFUL : (nowMs - flight.aRxTimeMs);
+if (nowMs - lastPlotMs >= 50) {   // 20 Hz 출력
+  lastPlotMs = nowMs;
 
-      Serial.print("ageA_ms=");
-      Serial.print(ageA);
-      Serial.print(" roll=");
-      Serial.print(flight.roll, 4);
-      Serial.print(" fRoll=");
-      Serial.print(flight.filterRoll, 2);
-      Serial.print(" pitch=");
-      Serial.print(flight.pitch, 4);
-      Serial.print(" yaw=");
-      Serial.print(flight.yaw, 4);
+  Serial.print("Alt:");
+  Serial.print(flight.baro.altitude, 3);
 
-      Serial.print(" | ax=");
-      Serial.print(flight.imu.ax, 1);
-      Serial.print(" ay=");
-      Serial.print(flight.imu.ay, 1);
-      Serial.print(" az=");
-      Serial.print(flight.imu.az, 1);
+  Serial.print("\tClimb:");
+  Serial.print(flight.baro.climbRate, 3);
 
-      Serial.print(" | gx=");
-      Serial.print(flight.imu.gx, 1);
-      Serial.print(" gy=");
-      Serial.print(flight.imu.gy, 1);
-      Serial.print(" gz=");
-      Serial.print(flight.imu.gz, 1);
+  Serial.print("P:");
+Serial.print(flight.baro.pressure, 3);
 
-      Serial.println();
+Serial.print("\tAlt:");
+Serial.print(flight.baro.altitude, 3);
 
-      Serial.print(" | Connect =");
-      Serial.print(pinDetached);
-      Serial.print(" parachute =");
-      Serial.print(g_parachuteDeployed);
-      Serial.print(" | State = ");
-      Serial.println(flight.state);
+Serial.print("\tClimb:");
+Serial.println(flight.baro.climbRate, 3);
 
-      Serial.print(" | Baro Alt=");
-      Serial.print(flight.baro.altitude, 2);
-      Serial.print(" climbRate =");
-      Serial.print(flight.baro.climbRate, 2);
+  Serial.println();
+  
+  
+}
 
-      Serial.print(" | GPS fix=");
-      Serial.print(flight.gps.fix);
-      Serial.print(" sats=");
-      Serial.print(flight.gps.sats);
-      Serial.print(" latE7=");
-      Serial.print(flight.gps.latitudeE7);
-      Serial.print(" lonE7=");
-      Serial.print(flight.gps.longitudeE7);
-      Serial.println();
-    }
+    // if (nowMs - lastDebugPrint >= 100) {
+    //   lastDebugPrint = nowMs;
+
+    //   uint32_t ageA = (flight.aRxTimeMs == 0) ? 0xFFFFFFFFUL : (nowMs - flight.aRxTimeMs);
+
+    //   Serial.print("ageA_ms=");
+    //   Serial.print(ageA);
+    //   Serial.print(" roll=");
+    //   Serial.print(flight.roll, 4);
+    //   Serial.print(" fRoll=");
+    //   Serial.print(flight.filterRoll, 2);
+    //   Serial.print(" pitch=");
+    //   Serial.print(flight.pitch, 4);
+    //   Serial.print(" yaw=");
+    //   Serial.print(flight.yaw, 4);
+
+    //   Serial.print(" | ax=");
+    //   Serial.print(flight.imu.ax, 1);
+    //   Serial.print(" ay=");
+    //   Serial.print(flight.imu.ay, 1);
+    //   Serial.print(" az=");
+    //   Serial.print(flight.imu.az, 1);
+
+    //   Serial.print(" | gx=");
+    //   Serial.print(flight.imu.gx, 1);
+    //   Serial.print(" gy=");
+    //   Serial.print(flight.imu.gy, 1);
+    //   Serial.print(" gz=");
+    //   Serial.print(flight.imu.gz, 1);
+
+    //   Serial.println();
+
+    //   Serial.print(" | Connect =");
+    //   Serial.print(pinDetached);
+    //   Serial.print(" parachute =");
+    //   Serial.print(g_parachuteDeployed);
+    //   Serial.print(" | State = ");
+    //   Serial.println(flight.state);
+
+    //   Serial.print(" | Baro Alt=");
+    //   Serial.print(flight.baro.altitude, 2);
+    //   Serial.print(" climbRate =");
+    //   Serial.print(flight.baro.climbRate, 2);
+
+    //   Serial.print(" | GPS fix=");
+    //   Serial.print(flight.gps.fix);
+    //   Serial.print(" sats=");
+    //   Serial.print(flight.gps.sats);
+    //   Serial.print(" latE7=");
+    //   Serial.print(flight.gps.latitudeE7);
+    //   Serial.print(" lonE7=");
+    //   Serial.print(flight.gps.longitudeE7);
+    //   Serial.println();
+    // }
 
 //     static uint32_t cnt = 0;
 

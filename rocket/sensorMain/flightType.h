@@ -36,6 +36,9 @@ struct __attribute__((packed)) FlightData {
   float pitch;
   float yaw;
 
+  float veltotal;
+  float velimu;
+
   float servoDegree;
 
   uint32_t baroTimeMs;   // B가 baro를 읽어 갱신한 시각(B millis)
