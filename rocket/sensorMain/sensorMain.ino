@@ -872,7 +872,7 @@ if (nowMs - g_lastClimbTxMs >= CLIMB_TX_PERIOD_MS) {
 }
 
 
-  // sendLoraFromFlight(flight, g_parachuteDeployed, pinDetached, ejectBtnClicked, extra1, chuteByDescent, chuteByTimer);
+  sendLoraFromFlight(flight, g_parachuteDeployed, pinDetached, ejectBtnClicked, extra1, chuteByDescent, chuteByTimer);
 
   if (!pinDetached) {
     pinDetached = isConnectOrDeteached(PIN_CONNECT_DETECT);
