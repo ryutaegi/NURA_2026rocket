@@ -284,7 +284,7 @@ void pollB2A(Stream& link, uint32_t nowMs) {
 
       case READ_CRC:
         crcBytes[crcIdx++] = b;
-
+        
         if (crcIdx >= 2) {
           uint8_t crcBuf[5 + B2A_MAX_LEN];
 
@@ -301,9 +301,10 @@ void pollB2A(Stream& link, uint32_t nowMs) {
             // 0x31: 기존 원격 리셋 명령
             // ------------------------------------------------
             if (msg == B2A_MSG_RESET) {
-            if (payloadLen >= 1 && payload[0] == 1) {
+              Serial.println("reboot");
+            //if (payloadLen >= 1 && payload[0] == 1) {
             softwareReset();
-         }
+         //}
         }
 
             // ------------------------------------------------
