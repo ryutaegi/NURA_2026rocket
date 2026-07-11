@@ -43,8 +43,8 @@ Adafruit_PWMServoDriver pca9685 = Adafruit_PWMServoDriver(0x40);
 static const float STARTUP_SWEEP_OFFSET_DEG = 45.0f;
 
 static const uint16_t PCA_FREQ_HZ = 50;
-static const uint8_t  MOTOR_CH1   = 0;
-static const uint8_t  MOTOR_CH2   = 1;
+static const uint8_t  MOTOR_CH1   = 14;
+static const uint8_t  MOTOR_CH2   = 15;
 
 static const uint16_t SERVO_MIN_US = 500;
 static const uint16_t SERVO_MAX_US = 2500;
@@ -363,6 +363,7 @@ void setup() {
   {
     writeServoDeg(MOTOR_CH1, SERVO_NEUTRAL_DEG1);
     writeServoDeg(MOTOR_CH2, SERVO_NEUTRAL_DEG2);
+      //sweepOnce();
   }
 
   // 분리한 설정 함수 호출

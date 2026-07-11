@@ -1037,89 +1037,89 @@ if (nowMs - g_lastClimbTxMs >= CLIMB_TX_PERIOD_MS) {
 // Tools -> Serial Plotter
 // Baud rate: 115200
 
-static uint32_t lastPlotMs = 0;
+// static uint32_t lastPlotMs = 0;
 
-if (nowMs - lastPlotMs >= 50) {   // 20 Hz 출력
-  lastPlotMs = nowMs;
+// if (nowMs - lastPlotMs >= 50) {   // 20 Hz 출력
+//   lastPlotMs = nowMs;
 
-  Serial.print("Alt:");
-  Serial.print(flight.baro.altitude, 3);
+//   Serial.print("Alt:");
+//   Serial.print(flight.baro.altitude, 3);
 
-  Serial.print("\tClimb:");
-  Serial.print(flight.baro.climbRate, 3);
+//   Serial.print("\tClimb:");
+//   Serial.print(flight.baro.climbRate, 3);
 
-  Serial.print("P:");
-Serial.print(flight.baro.pressure, 3);
+//   Serial.print("P:");
+// Serial.print(flight.baro.pressure, 3);
 
-Serial.print("\tAlt:");
-Serial.print(flight.baro.altitude, 3);
+// Serial.print("\tAlt:");
+// Serial.print(flight.baro.altitude, 3);
 
-Serial.print("\tClimb:");
-Serial.println(flight.baro.climbRate, 3);
+// Serial.print("\tClimb:");
+// Serial.println(flight.baro.climbRate, 3);
 
-  Serial.println();
+//   Serial.println();
   
   
-}
+// }
 
-    // if (nowMs - lastDebugPrint >= 100) {
-    //   lastDebugPrint = nowMs;
+    if (nowMs - lastDebugPrint >= 100) {
+      lastDebugPrint = nowMs;
 
-    //   uint32_t ageA = (flight.aRxTimeMs == 0) ? 0xFFFFFFFFUL : (nowMs - flight.aRxTimeMs);
+      uint32_t ageA = (flight.aRxTimeMs == 0) ? 0xFFFFFFFFUL : (nowMs - flight.aRxTimeMs);
 
-    //   Serial.print("ageA_ms=");
-    //   Serial.print(ageA);
-    //   Serial.print(" roll=");
-    //   Serial.print(flight.roll, 4);
-    //   Serial.print(" fRoll=");
-    //   Serial.print(flight.filterRoll, 2);
-    //   Serial.print(" pitch=");
-    //   Serial.print(flight.pitch, 4);
-    //   Serial.print(" yaw=");
-    //   Serial.print(flight.yaw, 4);
-    //   Serial.print(" veltotal=");
-    //   Serial.print(flight.veltotal, 4);
-    //   Serial.print(" imuvel=");
-    //   Serial.print(flight.velimu, 4);
+      Serial.print("ageA_ms=");
+      Serial.print(ageA);
+      Serial.print(" roll=");
+      Serial.print(flight.roll, 4);
+      Serial.print(" fRoll=");
+      Serial.print(flight.filterRoll, 2);
+      Serial.print(" pitch=");
+      Serial.print(flight.pitch, 4);
+      Serial.print(" yaw=");
+      Serial.print(flight.yaw, 4);
+      Serial.print(" veltotal=");
+      Serial.print(flight.veltotal, 4);
+      Serial.print(" imuvel=");
+      Serial.print(flight.velimu, 4);
 
-    //   Serial.print(" | ax=");
-    //   Serial.print(flight.imu.ax, 1);
-    //   Serial.print(" ay=");
-    //   Serial.print(flight.imu.ay, 1);
-    //   Serial.print(" az=");
-    //   Serial.print(flight.imu.az, 1);
+      Serial.print(" | ax=");
+      Serial.print(flight.imu.ax, 1);
+      Serial.print(" ay=");
+      Serial.print(flight.imu.ay, 1);
+      Serial.print(" az=");
+      Serial.print(flight.imu.az, 1);
 
-    //   Serial.print(" | gx=");
-    //   Serial.print(flight.imu.gx, 1);
-    //   Serial.print(" gy=");
-    //   Serial.print(flight.imu.gy, 1);
-    //   Serial.print(" gz=");
-    //   Serial.print(flight.imu.gz, 1);
+      Serial.print(" | gx=");
+      Serial.print(flight.imu.gx, 1);
+      Serial.print(" gy=");
+      Serial.print(flight.imu.gy, 1);
+      Serial.print(" gz=");
+      Serial.print(flight.imu.gz, 1);
 
-    //   Serial.println();
+      Serial.println();
 
-    //   Serial.print(" | Connect =");
-    //   Serial.print(pinDetached);
-    //   Serial.print(" parachute =");
-    //   Serial.print(g_parachuteDeployed);
-    //   Serial.print(" | State = ");
-    //   Serial.println(flight.state);
+      Serial.print(" | Connect =");
+      Serial.print(pinDetached);
+      Serial.print(" parachute =");
+      Serial.print(g_parachuteDeployed);
+      Serial.print(" | State = ");
+      Serial.println(flight.state);
 
-    //   Serial.print(" | Baro Alt=");
-    //   Serial.print(flight.baro.altitude, 2);
-    //   Serial.print(" climbRate =");
-    //   Serial.print(flight.baro.climbRate, 2);
+      Serial.print(" | Baro Alt=");
+      Serial.print(flight.baro.altitude, 2);
+      Serial.print(" climbRate =");
+      Serial.print(flight.baro.climbRate, 2);
 
-    //   Serial.print(" | GPS fix=");
-    //   Serial.print(flight.gps.fix);
-    //   Serial.print(" sats=");
-    //   Serial.print(flight.gps.sats);
-    //   Serial.print(" latE7=");
-    //   Serial.print(flight.gps.latitudeE7);
-    //   Serial.print(" lonE7=");
-    //   Serial.print(flight.gps.longitudeE7);
-    //   Serial.println();
-    // }
+      Serial.print(" | GPS fix=");
+      Serial.print(flight.gps.fix);
+      Serial.print(" sats=");
+      Serial.print(flight.gps.sats);
+      Serial.print(" latE7=");
+      Serial.print(flight.gps.latitudeE7);
+      Serial.print(" lonE7=");
+      Serial.print(flight.gps.longitudeE7);
+      Serial.println();
+    }
 
 //     static uint32_t cnt = 0;
 
