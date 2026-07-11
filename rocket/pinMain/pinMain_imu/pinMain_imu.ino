@@ -42,8 +42,8 @@ Adafruit_PWMServoDriver pca9685 = Adafruit_PWMServoDriver(0x40);
 static const float STARTUP_SWEEP_OFFSET_DEG = 45.0f;
 
 static const uint16_t PCA_FREQ_HZ = 50;
-static const uint8_t  MOTOR_CH1   = 0;
-static const uint8_t  MOTOR_CH2   = 1;
+static const uint8_t  MOTOR_CH1   = 14;
+static const uint8_t  MOTOR_CH2   = 15;
 
 static const uint16_t SERVO_MIN_US = 500;
 static const uint16_t SERVO_MAX_US = 2500;
@@ -73,7 +73,7 @@ static const uint8_t SYNC1 = 0xA5;
 static const uint8_t SYNC2 = 0x5A;
 static const uint8_t VER   = 1;
 static const uint8_t MSG   = 0x21;
-static const uint8_t LEN   = 20;
+static const uint8_t LEN   = 24;
 
 static uint16_t g_seq = 0;
 
@@ -143,6 +143,9 @@ void sendAtoB() {
   push_i16_le(buf, idx, s16_scale(flightData.filterRoll, 100.0f));
   push_i16_le(buf, idx, s16_scale(flightData.pitch,      32767.0f));
   push_i16_le(buf, idx, s16_scale(flightData.yaw,        32767.0f));
+
+  push_i16_le(buf, idx, s16_scale(flightData.veltotal, 1.0f));
+  push_i16_le(buf, idx, s16_scale(flightData.velimu,   1.0f));
 
   // CRC over [VER..PAYLOAD]
   uint16_t crc = crc16_ccitt(&buf[2], (size_t)(idx - 2));
