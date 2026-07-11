@@ -49,8 +49,8 @@ static const uint8_t  MOTOR_CH2   = 15;
 static const uint16_t SERVO_MIN_US = 500;
 static const uint16_t SERVO_MAX_US = 2500;
 
-static const float   SERVO_NEUTRAL_DEG1 = 89.5f;  //흰
-static const float   SERVO_NEUTRAL_DEG2 = 76.5f;  //검
+static const float   SERVO_NEUTRAL_DEG1 = 94.5f;  // b급 로켓 중립각 94.5
+static const float   SERVO_NEUTRAL_DEG2 = 78.5f;  // b급 로켓 중립각 78.5
 static float servoDeg1 = SERVO_NEUTRAL_DEG1;
 static float servoDeg2 = SERVO_NEUTRAL_DEG2;
 // [설정] 서보 물리적 제한 각도
