@@ -352,7 +352,7 @@ static const uint8_t SYNC1 = 0xA5;
 static const uint8_t SYNC2 = 0x5A;
 static const uint8_t VER = 1;
 static const uint8_t MSG = 0x21;
-static const uint8_t LEN = 24;
+static const uint8_t LEN = 28;
 
 // ====== CRC16 CCITT-FALSE ======
 static uint16_t crc16_ccitt(const uint8_t* data, size_t len) {
@@ -478,6 +478,13 @@ void parseAtoB(Stream& link, FlightData& f, uint32_t nowB_ms) {
             int16_t velimu_cmps = rd_i16_le(&payload[idx]);
             idx += 2;
 
+            // 추가: servoDeg1, servoDeg2는 deg × 100으로 수신
+            int16_t servoDeg1_100 = rd_i16_le(&payload[idx]);
+            idx += 2;
+
+            int16_t servoDeg2_100 = rd_i16_le(&payload[idx]);
+            idx += 2;
+
             f.imu.ax = ax10 / 100.0f;
             f.imu.ay = ay10 / 100.0f;
             f.imu.az = az10 / 100.0f;
@@ -492,6 +499,8 @@ void parseAtoB(Stream& link, FlightData& f, uint32_t nowB_ms) {
             f.yaw = yaw100 / 32767.0f;
             f.veltotal = (float)veltotal_cmps;
             f.velimu   = (float)velimu_cmps;
+            f.servoDeg1 = servoDeg1_100 / 100.0f;
+            f.servoDeg2 = servoDeg2_100 / 100.0f;
           }
 
           st = WAIT_S1;

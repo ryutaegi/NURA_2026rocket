@@ -39,7 +39,8 @@ struct __attribute__((packed)) FlightData {
   float veltotal;
   float velimu;
 
-  float servoDegree;
+  float servoDeg1;
+  float servoDeg2;
 
   uint32_t baroTimeMs;   // B가 baro를 읽어 갱신한 시각(B millis)
   uint32_t gpsTimeMs;    // B가 gps(위치/속도 등)를 갱신한 시각(B millis)

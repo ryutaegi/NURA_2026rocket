@@ -49,8 +49,8 @@ static const uint8_t  MOTOR_CH2   = 15;
 static const uint16_t SERVO_MIN_US = 500;
 static const uint16_t SERVO_MAX_US = 2500;
 
-static const float   SERVO_NEUTRAL_DEG1 = 94.5f;  // b급 로켓 중립각 94.5
-static const float   SERVO_NEUTRAL_DEG2 = 78.5f;  // b급 로켓 중립각 78.5
+static const float   SERVO_NEUTRAL_DEG1 = 87.5f;  // b급 로켓 중립각 94.5
+static const float   SERVO_NEUTRAL_DEG2 = 73.5f;  // b급 로켓 중립각 78.5
 static float servoDeg1 = SERVO_NEUTRAL_DEG1;
 static float servoDeg2 = SERVO_NEUTRAL_DEG2;
 // [설정] 서보 물리적 제한 각도
@@ -73,7 +73,7 @@ static const uint8_t SYNC1 = 0xA5;
 static const uint8_t SYNC2 = 0x5A;
 static const uint8_t VER   = 1;
 static const uint8_t MSG   = 0x21;
-static const uint8_t LEN   = 24;
+static const uint8_t LEN   = 28;
 
 static uint16_t g_seq = 0;
 
@@ -124,28 +124,44 @@ void sendAtoB() {
   buf[idx++] = VER;
   buf[idx++] = MSG;
   buf[idx++] = LEN;
+
   push_u16_le(buf, idx, g_seq++);
   push_u32_le(buf, idx, flightData.timeMs);
 
-  // Payload (10 * int16 = 20 bytes)
-  push_i16_le(buf, idx, flightData.imu.ax);
-  push_i16_le(buf, idx, flightData.imu.ay);
-  push_i16_le(buf, idx, flightData.imu.az);
-  
-  // gyro: deg/s * 10
+  // -------------------------------------------------
+  // Payload: 14 × int16_t = 28 bytes
+  // -------------------------------------------------
+
+  // IMU acceleration
+  push_i16_le(buf, idx, (int16_t)flightData.imu.ax);
+  push_i16_le(buf, idx, (int16_t)flightData.imu.ay);
+  push_i16_le(buf, idx, (int16_t)flightData.imu.az);
+
+  // Gyro: deg/s × 10
   push_i16_le(buf, idx, s16_scale(flightData.imu.gx, 10.0f));
   push_i16_le(buf, idx, s16_scale(flightData.imu.gy, 10.0f));
   push_i16_le(buf, idx, s16_scale(flightData.imu.gz, 10.0f));
 
-  // angles: deg * 100
-  push_i16_le(buf, idx, s16_scale(flightData.roll,       32767.0f));
+  // Angle: deg × 100
+  push_i16_le(buf, idx, s16_scale(flightData.roll,       100.0f));
   push_i16_le(buf, idx, s16_scale(flightData.filterRoll, 100.0f));
-  push_i16_le(buf, idx, s16_scale(flightData.pitch,      32767.0f));
-  push_i16_le(buf, idx, s16_scale(flightData.yaw,        32767.0f));
+  push_i16_le(buf, idx, s16_scale(flightData.pitch,      100.0f));
+  push_i16_le(buf, idx, s16_scale(flightData.yaw,        100.0f));
 
-  // vertical velocity: cm/s 그대로 전송
+  // Vertical velocity: cm/s
   push_i16_le(buf, idx, s16_scale(flightData.veltotal, 1.0f));
   push_i16_le(buf, idx, s16_scale(flightData.velimu,   1.0f));
+
+  // Servo command angles: deg × 100
+  push_i16_le(buf, idx, s16_scale(servoDeg1, 100.0f));
+  push_i16_le(buf, idx, s16_scale(servoDeg2, 100.0f));
+
+  // 전송 바이트 수 검증
+  // Header before payload = 11 bytes
+  // idx should now be 11 + LEN = 39
+  if (idx != 11 + LEN) {
+    return;
+  }
 
   // CRC over [VER..PAYLOAD]
   uint16_t crc = crc16_ccitt(&buf[2], (size_t)(idx - 2));
@@ -471,7 +487,7 @@ void loop() {
     const float GRAVITY = 980.665f;
 
     const float P_DEADZONE_DEG = 1.5f;
-    const float V_CONTROL_START = 500.0f;
+    const float V_CONTROL_START = 0.0f;
     const float V_CONTROL_FULL  = 2000.0f;
 
     static float filtered_gyro_z = 0.0f;
@@ -592,7 +608,9 @@ void loop() {
       Serial.print("Velimu:");   Serial.print(flightData.velimu / 100, 2);
       Serial.print("servoDeg1:");  Serial.print(servoDeg1); 
       Serial.print("servoDeg2:");  Serial.print(servoDeg2);  
-      Serial.print("filterRoll:");  Serial.println(flightData.filterRoll);              
+      Serial.print("filterRoll:");  Serial.println(flightData.filterRoll); 
+      Serial.print("FlightData size = ");
+Serial.println(sizeof(FlightData));             
     }
   }
 

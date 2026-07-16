@@ -12,21 +12,21 @@ float diff = 0.0f;
 
 // ======================= 자이로 캘리브레이션 변수 =======================
      // 가속도 바이어스 저장 변수 (단위: G)
-float accelBiasX = 90.9453f;
-float accelBiasY = -5.9888f;
-float accelBiasZ = 53.9768f;
+float accelBiasX = 83.6550f;
+float accelBiasY = 87.9756f;
+float accelBiasZ = 23.8130f;
 
 // 캘리브레이션 관련 설정
-const int BIAS_SAMPLES = 1000; // 바이어스 측정을 위해 수집할 샘플 개수
+const int BIAS_SAMPLES = 5000; // 바이어스 측정을 위해 수집할 샘플 개수
 bool isCalibrated = false;    // 캘리브레이션 완료 여부 플래그
 
 static bool gyro_calibrating = false;
-static float gx_bias = -0.0433f, gy_bias = -0.2743f, gz_bias = 0.3593f;
+static float gx_bias = 0.1596f, gy_bias = 1.2631f, gz_bias = -0.3700f;
 static float gx_sum = 0.0f, gy_sum = 0.0f, gz_sum = 0.0f;
 float mag_off_x = 11.65f, mag_off_y = -30.7f, mag_off_z = -86.05f;
 float mag_scale_x = 1, mag_scale_y = 1, mag_scale_z = 1;
 static uint32_t gyro_sample_count = 0;
-const uint32_t GYRO_CAL_SAMPLES = 1000;
+const uint32_t GYRO_CAL_SAMPLES = 5000;
 float total_speed;
 // 전역 변수 선언 필요
 //  float diff_q1 = 0.0f, diff_q2 = 0.0f, diff_q3 = 0.0f;
@@ -297,7 +297,7 @@ const float NOISE_THRESHOLD = deg2rad(15.0f);
 // Serial.print(",");
 //   Serial.println(imuData.az, 4);
 
-  //     // ======================= 자이로 바이어스 측정 =======================
+      // ======================= 자이로 바이어스 측정 =======================
   // if (Serial.available() > 0) {
   //     String input = Serial.readStringUntil('\n');
   //     input.trim();
