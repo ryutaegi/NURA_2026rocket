@@ -19,6 +19,8 @@ static uint32_t stable_count = 0;
 static uint32_t last_stable_time = 0;
 static float prevErrorYaw = 0.0f;
 static unsigned long prevTimePD = 0;
+static uint32_t launchTimeMs = 0;
+static bool launchTimerStarted = false;
 
 // ===== 속도 (3축 -> 지구고정좌표계에서 적분) =====
 float vel_ex = 0.0f;   // 지구 X 속도 (cm/s)
@@ -365,7 +367,7 @@ void loop() {
     const float GRAVITY = 980.665f;
 
     const float P_DEADZONE_DEG = 1.5f;
-    const float V_CONTROL_START = 500.0f;
+    const float V_CONTROL_START = 0.0f;
     const float V_CONTROL_FULL  = 2000.0f;
 
     // [축방향 가속도 데드존] 단위 = cm/s^2 (선가속과 동일). 3축 각각에 동일 적용.
@@ -408,6 +410,8 @@ void loop() {
     if (launched && !prevLaunched) {
       vel_ex = vel_ey = vel_ez = 0.0f;
       prevTimeVel = currentTimeVel;      // 첫 적분 구간을 한 루프로 제한 (dtt=0)
+      launchTimeMs = millis();
+      launchTimerStarted = true;
     }
     prevLaunched = launched;
 
@@ -504,14 +508,18 @@ void loop() {
       // -----------------------------------------------------------------
       // 6. 서보 모터 각도 적용 및 출력
       // -----------------------------------------------------------------
-      // 서보 모터 각도 적용 (서보 중립 + PD 제어량)
-      // ※ 실제 핀 구조에 따라 outputYaw의 부호(+/-)를 반대로 해야 할 수 있습니다.
-      servoDeg1 = SERVO_NEUTRAL_DEG1 + outputYaw;
-      servoDeg2 = SERVO_NEUTRAL_DEG2 + outputYaw;
+      // 서보 모터 각도 적용 (발사 후 1.5초 이후부터 제어 시작)
+      bool controlActive = launchTimerStarted && (millis() - launchTimeMs >= 2000);
 
-      // 서보 기구부 및 핀 보호를 위한 한계치 제한 (Clamping)
-      servoDeg1 = constrain(servoDeg1, SERVO_NEUTRAL_DEG1 - MAX_SERVO_LIMIT, SERVO_NEUTRAL_DEG1 + MAX_SERVO_LIMIT);
-      servoDeg2 = constrain(servoDeg2, SERVO_NEUTRAL_DEG2 - MAX_SERVO_LIMIT, SERVO_NEUTRAL_DEG2 + MAX_SERVO_LIMIT);
+      if (controlActive) {
+        servoDeg1 = SERVO_NEUTRAL_DEG1 + outputYaw;
+        servoDeg2 = SERVO_NEUTRAL_DEG2 + outputYaw;
+        servoDeg1 = constrain(servoDeg1, SERVO_NEUTRAL_DEG1 - MAX_SERVO_LIMIT, SERVO_NEUTRAL_DEG1 + MAX_SERVO_LIMIT);
+        servoDeg2 = constrain(servoDeg2, SERVO_NEUTRAL_DEG2 - MAX_SERVO_LIMIT, SERVO_NEUTRAL_DEG2 + MAX_SERVO_LIMIT);
+      } else {
+        servoDeg1 = SERVO_NEUTRAL_DEG1;
+        servoDeg2 = SERVO_NEUTRAL_DEG2;
+      }
 
       // 서보 모터 물리적 출력
       writeServoDeg(MOTOR_CH1, servoDeg1);
