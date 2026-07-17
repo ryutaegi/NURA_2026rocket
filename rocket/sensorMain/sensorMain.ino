@@ -1071,7 +1071,7 @@ if (nowMs - g_lastClimbTxMs >= CLIMB_TX_PERIOD_MS) {
   
 // }
 
-    if (nowMs - lastDebugPrint >= 100) {
+    if (nowMs - lastDebugPrint >= 1000) {
       lastDebugPrint = nowMs;
 
       uint32_t ageA = (flight.aRxTimeMs == 0) ? 0xFFFFFFFFUL : (nowMs - flight.aRxTimeMs);

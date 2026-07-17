@@ -75,7 +75,7 @@ static const uint8_t SYNC1 = 0xA5;
 static const uint8_t SYNC2 = 0x5A;
 static const uint8_t VER   = 1;
 static const uint8_t MSG   = 0x21;
-static const uint8_t LEN   = 24;
+static const uint8_t LEN   = 28;
 
 static uint16_t g_seq = 0;
 
@@ -148,6 +148,9 @@ void sendAtoB() {
 
   push_i16_le(buf, idx, s16_scale(flightData.veltotal, 1.0f));
   push_i16_le(buf, idx, s16_scale(flightData.velimu,   1.0f));
+
+  push_i16_le(buf, idx, s16_scale(servoDeg1, 100.0f));
+  push_i16_le(buf, idx, s16_scale(servoDeg2, 100.0f));
 
   // CRC over [VER..PAYLOAD]
   uint16_t crc = crc16_ccitt(&buf[2], (size_t)(idx - 2));
@@ -529,11 +532,11 @@ void loop() {
       prevErrorYaw = errorYaw;
 
       // ================= 디버그 출력 (3축 속도 + 지구 Z 가속도) =================
-      Serial.print("Vel:");   Serial.print(total_speed / 100, 2);  // m/s (3축 벡터 크기)
-      Serial.print("\tvx:");  Serial.print(vel_ex / 100, 2);       // m/s (지구 X)
-      Serial.print("\tvy:");  Serial.print(vel_ey / 100, 2);       // m/s (지구 Y)
-      Serial.print("\tvz:");  Serial.print(vel_ez / 100, 2);       // m/s (지구 Z 수직)
-      Serial.print("\taez:"); Serial.println(aez, 2);              // 지구 Z 선가속 (cm/s^2)
+      // Serial.print("Vel:");   Serial.print(total_speed / 100, 2);  // m/s (3축 벡터 크기)
+      // Serial.print("\tvx:");  Serial.print(vel_ex / 100, 2);       // m/s (지구 X)
+      // Serial.print("\tvy:");  Serial.print(vel_ey / 100, 2);       // m/s (지구 Y)
+      // Serial.print("\tvz:");  Serial.print(vel_ez / 100, 2);       // m/s (지구 Z 수직)
+      // Serial.print("\taez:"); Serial.println(aez, 2);              // 지구 Z 선가속 (cm/s^2)
     }
   }
 
