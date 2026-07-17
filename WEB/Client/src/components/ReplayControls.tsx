@@ -27,9 +27,11 @@ export default function ReplayControls({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
   return (
     <div className="space-y-4">
-      <h3 className="text-white text-sm">리플레이 컨트롤</h3>
+      <h3 className="text-[#222222] font-semibold text-sm">리플레이 컨트롤</h3>
 
       {/* 타임라인 */}
       <div>
@@ -40,12 +42,12 @@ export default function ReplayControls({
           step="0.1"
           value={currentTime}
           onChange={(e) => onTimeChange(Number(e.target.value))}
-          className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+          className="w-full h-2 rounded-lg appearance-none cursor-pointer"
           style={{
-            background: `linear-gradient(to right, #8b5cf6 0%, #8b5cf6 ${(currentTime / duration) * 100}%, #374151 ${(currentTime / duration) * 100}%, #374151 100%)`,
+            background: `linear-gradient(to right, #ff385c 0%, #ff385c ${progress}%, #ebebeb ${progress}%, #ebebeb 100%)`,
           }}
         />
-        <div className="flex justify-between text-xs text-gray-400 mt-2">
+        <div className="flex justify-between text-xs text-[#6a6a6a] mt-1.5">
           <span>{formatTime(currentTime)}</span>
           <span>{formatTime(duration)}</span>
         </div>
@@ -55,7 +57,7 @@ export default function ReplayControls({
       <div className="flex items-center gap-2">
         <button
           onClick={onReset}
-          className="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded transition-colors"
+          className="bg-[#f2f2f2] hover:bg-[#ebebeb] text-[#222222] p-2 rounded-lg transition-colors border border-[#dddddd]"
           title="리셋"
         >
           <RotateCcw className="w-4 h-4" />
@@ -63,7 +65,7 @@ export default function ReplayControls({
 
         <button
           onClick={onPlayPause}
-          className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded transition-colors flex items-center justify-center gap-2"
+          className="flex-1 bg-[#ff385c] hover:bg-[#e00b41] text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 font-medium text-sm"
         >
           {isPlaying ? (
             <>
@@ -78,12 +80,12 @@ export default function ReplayControls({
           )}
         </button>
 
-        <div className="flex items-center gap-2 bg-gray-700 rounded px-3 py-2">
-          <FastForward className="w-4 h-4 text-white" />
+        <div className="flex items-center gap-2 bg-[#f2f2f2] rounded-lg px-3 py-2 border border-[#dddddd]">
+          <FastForward className="w-4 h-4 text-[#6a6a6a]" />
           <select
             value={speed}
             onChange={(e) => onSpeedChange(Number(e.target.value))}
-            className="bg-transparent text-white text-sm outline-none"
+            className="bg-transparent text-[#222222] text-sm outline-none cursor-pointer"
           >
             <option value="0.5">0.5x</option>
             <option value="1">1x</option>
@@ -95,15 +97,15 @@ export default function ReplayControls({
       </div>
 
       {/* 진행률 표시 */}
-      <div className="bg-gray-800 rounded-lg p-3">
-        <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+      <div className="bg-[#f7f7f7] rounded-xl p-3 border border-[#ebebeb]">
+        <div className="flex items-center justify-between text-xs text-[#6a6a6a] mb-1.5">
           <span>재생 진행률</span>
-          <span>{((currentTime / duration) * 100).toFixed(1)}%</span>
+          <span className="text-[#ff385c] font-medium">{progress.toFixed(1)}%</span>
         </div>
-        <div className="w-full bg-gray-700 rounded-full h-1.5">
+        <div className="w-full bg-[#ebebeb] rounded-full h-1.5">
           <div
-            className="bg-purple-500 h-1.5 rounded-full transition-all"
-            style={{ width: `${(currentTime / duration) * 100}%` }}
+            className="bg-[#ff385c] h-1.5 rounded-full transition-all"
+            style={{ width: `${progress}%` }}
           />
         </div>
       </div>

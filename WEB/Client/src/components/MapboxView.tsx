@@ -33,7 +33,7 @@ export default function MapboxView({ telemetry }: MapboxViewProps) {
 
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
-      style: 'mapbox://styles/mapbox/dark-v11',
+      style: 'mapbox://styles/mapbox/light-v11',
       center: [telemetry.longitude, telemetry.latitude],
       zoom: 18,
       pitch: 75,

@@ -38,26 +38,20 @@ export default function RecoveryPage() {
   const recoveryMarkersMapRef = useRef<Map<string, any>>(new Map());
   const [isApiLoaded, setIsApiLoaded] = useState(false);
 
-  // 내 위치 관련
   const [userLocation, setUserLocation] = useState<any>(null);
   const userMarkerRef = useRef<any>(null);
 
-  // 실시간 데이터
   const { lastMessage, isConnected } = useWebSocket();
   const [liveTelemetry, setLiveTelemetry] = useState<RocketTelemetry | null>(null);
   const liveRocketMarkerRef = useRef<any>(null);
   const [isPC, setIsPC] = useState(window.innerWidth >= 1024);
 
-  // 화면 크기 감지
   useEffect(() => {
     const handleResize = () => setIsPC(window.innerWidth >= 1024);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 로딩 상태 제거 (Firestore가 실시간 처리)
-
-  // Firebase 마커 실시간 구독
   useEffect(() => {
     const q = query(collection(db, "recovery_markers"), orderBy("timestamp", "asc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -74,7 +68,6 @@ export default function RecoveryPage() {
     return () => unsubscribe();
   }, []);
 
-  // Google Maps 스크립트 로드 - 중복 방지 및 최적화
   useEffect(() => {
     if (window.google?.maps) {
       setIsApiLoaded(true);
@@ -85,7 +78,6 @@ export default function RecoveryPage() {
     if (!apiKey) return;
 
     if (document.querySelector('script[src*="maps.googleapis.com"]')) {
-      // 이미 로드 중인 경우 감시
       const timer = setInterval(() => {
         if (window.google?.maps) {
           setIsApiLoaded(true);
@@ -103,7 +95,6 @@ export default function RecoveryPage() {
     document.head.appendChild(script);
   }, []);
 
-  // 텔레메트리 업데이트 (로컬)
   useEffect(() => {
     if (lastMessage?.type === 'telemetry') {
       const data = lastMessage.data;
@@ -114,7 +105,6 @@ export default function RecoveryPage() {
     }
   }, [lastMessage]);
 
-  // Firebase 실시간 중계 문서 구독 (원격)
   useEffect(() => {
     if (!isConnected) {
       const unsub = onSnapshot(doc(db, "live", "current"), { includeMetadataChanges: true }, (snapshot) => {
@@ -141,36 +131,29 @@ export default function RecoveryPage() {
     }
   }, [isConnected]);
 
-  // 지도 초기화 - 핵심 로직 집중
   useEffect(() => {
     if (!isApiLoaded || !mapRef.current || googleMapRef.current) return;
 
     try {
-      console.log("Map initialization started on container:", mapRef.current);
       const map = new window.google.maps.Map(mapRef.current, {
         center: { lat: 37.5665, lng: 126.9780 },
         zoom: 13,
         mapTypeControl: true,
         streetViewControl: false,
         fullscreenControl: true,
-        backgroundColor: '#0f172a'
+        backgroundColor: '#f7f7f7'
       });
 
       googleMapRef.current = map;
 
-      map.addListener('click', (e: any) => {
-        if (e.latLng) {
-          // click handler will use current isConnected via a ref or direct access if inside primitive effect
-          // However, for clean logic, we'll store a ref for isConnected or use a functional update approach
-          // Here, we just call the addMarker function
-        }
+      map.addListener('click', (_e: any) => {
+        // click handler synced via isConnected effect below
       });
     } catch (err) {
       console.error("CRITICAL Map Init Error:", err);
     }
   }, [isApiLoaded]);
 
-  // 내 위치 추적 및 권한 대응
   useEffect(() => {
     if (!navigator.geolocation) return;
 
@@ -193,7 +176,6 @@ export default function RecoveryPage() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
-  // 이펙트를 통해 지도 클릭 리스너를 isConnected 상태와 동기화
   useEffect(() => {
     if (!googleMapRef.current) return;
 
@@ -208,11 +190,9 @@ export default function RecoveryPage() {
     return () => window.google?.maps?.event?.removeListener(clickListener);
   }, [isConnected, isApiLoaded]);
 
-  // 마커 동기화 및 실시간 업데이트 로직 (생략 방지)
   useEffect(() => {
     if (!googleMapRef.current || !isApiLoaded) return;
 
-    // 내 위치 마커
     if (userLocation) {
       if (!userMarkerRef.current) {
         userMarkerRef.current = new window.google.maps.Marker({
@@ -232,7 +212,6 @@ export default function RecoveryPage() {
       }
     }
 
-    // 목록 마커 동기화
     const currentMarkerIds = new Set(markers.map(m => m.id));
     recoveryMarkersMapRef.current.forEach((marker, id) => {
       if (!currentMarkerIds.has(id)) {
@@ -253,7 +232,6 @@ export default function RecoveryPage() {
       }
     });
 
-    // 로켓 실시간 마커
     if (liveTelemetry) {
       const pos = { lat: liveTelemetry.latitude, lng: liveTelemetry.longitude };
       if (!liveRocketMarkerRef.current) {
@@ -262,7 +240,7 @@ export default function RecoveryPage() {
           map: googleMapRef.current,
           icon: {
             path: 'M15,0 L10,5 L10,15 L5,20 L5,25 L10,30 L10,40 L15,45 L20,40 L20,30 L25,25 L25,20 L20,15 L20,5 Z',
-            fillColor: '#ef4444',
+            fillColor: '#ff385c',
             fillOpacity: 1,
             strokeWeight: 1,
             rotation: liveTelemetry.yaw,
@@ -282,7 +260,6 @@ export default function RecoveryPage() {
     }
   }, [isApiLoaded, userLocation, markers, liveTelemetry]);
 
-  // 핸들러 함수들 (Firebase 연동)
   const addMarker = async (lat: number, lng: number) => {
     if (!isConnected) return;
     try {
@@ -318,32 +295,35 @@ export default function RecoveryPage() {
     }
   };
 
+  const panelShadow = { boxShadow: 'rgba(0,0,0,0.02) 0 0 0 1px, rgba(0,0,0,0.04) 0 2px 6px 0, rgba(0,0,0,0.1) 0 4px 8px 0' };
+
   return (
     <div
-      className="h-[calc(100vh-4rem)] p-4 bg-black overflow-hidden flex"
+      className="h-[calc(100vh-4rem)] p-4 bg-[#f7f7f7] overflow-hidden flex"
       style={{ flexDirection: isPC ? 'row' : 'column', gap: '1rem' }}
     >
       {/* 맵 컨테이너 */}
       <div
-        className="bg-gray-950 rounded-2xl overflow-hidden relative border border-white/10 shadow-2xl"
-        style={{ flex: isPC ? 3 : 'none', height: isPC ? '100%' : '40vh' }}
+        className="bg-white rounded-2xl overflow-hidden relative border border-[#dddddd]"
+        style={{
+          flex: isPC ? 3 : 'none',
+          height: isPC ? '100%' : '40vh',
+          ...panelShadow
+        }}
       >
         <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
 
-        {/* 상단 오버레이 제거됨 */}
         {!isApiLoaded && (
-          <div className="absolute top-4 left-4 bg-black/80 backdrop-blur-md text-white px-4 py-2 rounded-xl z-10 border border-white/10">
-            <p className="text-[10px] text-blue-400 animate-pulse">Loading Map Engine...</p>
+          <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-md text-[#222222] px-4 py-2 rounded-xl z-10 border border-[#dddddd]">
+            <p className="text-[10px] text-[#ff385c] animate-pulse font-semibold">Loading Map Engine...</p>
           </div>
         )}
 
-        {/* 선택된 마커 정보 오버레이 이동됨 (사이드바로) */}
-
-        {/* 위치 버튼 */}
         {userLocation && (
           <button
             onClick={() => googleMapRef.current?.panTo(userLocation)}
-            className="absolute bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-2xl z-20 hover:bg-blue-500 active:scale-90 transition-all border border-white/20"
+            className="absolute bottom-6 right-6 bg-[#ff385c] hover:bg-[#e00b41] text-white p-4 rounded-full z-20 active:scale-90 transition-all border-2 border-white"
+            style={{ boxShadow: '0 4px 12px rgba(255,56,92,0.4)' }}
           >
             <MapPin className="w-6 h-6" />
           </button>
@@ -352,31 +332,33 @@ export default function RecoveryPage() {
 
       {/* 조작 패널 */}
       <div
-        className="bg-gray-900/50 backdrop-blur-xl p-4 flex flex-col gap-4 rounded-2xl border border-white/10 overflow-hidden"
-        style={{ width: isPC ? '320px' : '100%', flex: isPC ? 'none' : 1 }}
+        className="bg-white p-4 flex flex-col gap-4 rounded-2xl border border-[#dddddd] overflow-hidden"
+        style={{
+          width: isPC ? '300px' : '100%',
+          flex: isPC ? 'none' : 1,
+          ...panelShadow
+        }}
       >
-        <div className="flex items-center gap-2 text-white font-black text-sm border-b border-white/5 pb-2">
-          <HistoryIcon className="w-4 h-4 text-blue-400" /> 포인트 관리
+        <div className="flex items-center gap-2 text-[#222222] font-semibold text-sm border-b border-[#ebebeb] pb-3">
+          <HistoryIcon className="w-4 h-4 text-[#ff385c]" />
+          포인트 관리
         </div>
 
-        {/* {!isConnected && (
-          <div className="bg-blue-600/10 border border-blue-500/20 p-3 rounded-lg flex flex-col gap-1 items-center text-center">
-            <span className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Read Only Mode</span>
-            <p className="text-[9px] text-white-300/60 leading-tight">로컬 서버에 연결되지 않아<br />조작이 제한됩니다.</p>
-          </div>
-        )} */}
-
-        <div className="flex-1 overflow-y-auto space-y-2 min-h-0 py-2">
+        <div className="flex-1 overflow-y-auto space-y-2 min-h-0 py-1">
           {markers.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center opacity-20 gap-2 mb-10">
-              <MapPin className="w-10 h-10" />
-              <p className="text-[10px] font-black uppercase tracking-widest">No Active Points</p>
+            <div className="h-full flex flex-col items-center justify-center gap-2 mb-10 opacity-30">
+              <MapPin className="w-10 h-10 text-[#222222]" />
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#6a6a6a]">No Active Points</p>
             </div>
           ) : (
             markers.map((m, i) => (
               <div
                 key={m.id}
-                className={`p-3 rounded-xl border transition-all cursor-pointer transform hover:scale-[1.01] active:scale-[0.98] ${selectedMarker?.id === m.id ? 'bg-blue-600/20 border-blue-500/50 shadow-lg' : 'bg-gray-800/50 border-white/5 hover:border-white/20'}`}
+                className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                  selectedMarker?.id === m.id
+                    ? 'bg-[#fff5f7] border-[#ff385c]/40'
+                    : 'bg-white border-[#dddddd] hover:border-[#c1c1c1]'
+                }`}
                 onClick={() => {
                   setSelectedMarker(m);
                   googleMapRef.current?.panTo({ lat: m.latitude, lng: m.longitude });
@@ -384,14 +366,17 @@ export default function RecoveryPage() {
                 }}
               >
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-white font-black text-xs uppercase tracking-tight">Point {i + 1}</span>
+                  <span className="text-[#222222] font-semibold text-xs">Point {i + 1}</span>
                   {isConnected && (
-                    <button onClick={(e) => { e.stopPropagation(); deleteMarker(m.id); }} className="text-gray-500 hover:text-red-400 transition-colors">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deleteMarker(m.id); }}
+                      className="text-[#929292] hover:text-red-500 transition-colors"
+                    >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
-                <div className="text-[10px] text-gray-500 font-mono">
+                <div className="text-[10px] text-[#6a6a6a] font-mono">
                   {m.latitude.toFixed(6)}, {m.longitude.toFixed(6)}
                 </div>
               </div>
@@ -399,17 +384,19 @@ export default function RecoveryPage() {
           )}
         </div>
 
-        {/* 선택된 마커 상세 정보 (사이드바 하단) */}
         {selectedMarker && (
-          <div className="mt-auto border-t border-white/5 pt-4 flex flex-col gap-3">
+          <div className="mt-auto border-t border-[#ebebeb] pt-4 flex flex-col gap-3">
             <div className="flex justify-between items-center">
-              <h3 className="font-black text-[10px] uppercase tracking-widest text-blue-400">Point Details</h3>
-              <button onClick={() => setSelectedMarker(null)} className="text-gray-500 hover:text-white transition-colors">
+              <h3 className="font-semibold text-[10px] uppercase tracking-widest text-[#ff385c]">Point Details</h3>
+              <button
+                onClick={() => setSelectedMarker(null)}
+                className="text-[#6a6a6a] hover:text-[#222222] transition-colors"
+              >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
-            <div className="bg-gray-950/30 rounded-xl p-3 border border-white/5">
-              <div className="text-[9px] text-gray-500 font-mono mb-2 break-all">
+            <div className="bg-[#f7f7f7] rounded-xl p-3 border border-[#dddddd]">
+              <div className="text-[9px] text-[#6a6a6a] font-mono mb-2 break-all">
                 {selectedMarker.latitude.toFixed(8)}, {selectedMarker.longitude.toFixed(8)}
               </div>
               <textarea
@@ -421,10 +408,16 @@ export default function RecoveryPage() {
                   updateMarkerNotes(selectedMarker.id, newNotes);
                 }}
                 readOnly={!isConnected}
-                className={`w-full bg-gray-950/50 text-white text-[11px] rounded-lg p-3 outline-none h-32 resize-none border transition-all ${!isConnected ? 'border-transparent cursor-default' : 'border-white/10 focus:border-blue-500/50 shadow-inner'}`}
+                className={`w-full bg-white text-[#222222] text-[11px] rounded-lg p-3 outline-none h-28 resize-none border transition-all ${
+                  !isConnected
+                    ? 'border-[#dddddd] cursor-default text-[#6a6a6a]'
+                    : 'border-[#dddddd] focus:border-[#222222]'
+                }`}
                 placeholder={isConnected ? "회수 지점에 대한 메모를 입력하세요..." : "로컬 서버 연결 후 입력 가능합니다."}
               />
-              {!isConnected && <p className="text-[8px] text-gray-500 mt-2 italic">* 로컬 서버에 연결되어야 메모를 수정할 수 있습니다.</p>}
+              {!isConnected && (
+                <p className="text-[8px] text-[#929292] mt-1.5 italic">* 로컬 서버에 연결되어야 메모를 수정할 수 있습니다.</p>
+              )}
             </div>
           </div>
         )}

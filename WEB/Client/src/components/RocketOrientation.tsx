@@ -21,7 +21,7 @@ export default function RocketOrientation({ telemetry }: RocketOrientationProps)
 
     // Scene 설정
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0a0a);
+    scene.background = new THREE.Color(0xf7f7f7);
     sceneRef.current = scene;
 
     // Renderer 설정
@@ -101,7 +101,7 @@ export default function RocketOrientation({ telemetry }: RocketOrientationProps)
     scene.add(directionalLight);
 
     // 그리드 헬퍼
-    const gridHelper = new THREE.GridHelper(10, 10, 0x1e293b, 0x1e293b); //0x3b82f6
+    const gridHelper = new THREE.GridHelper(10, 10, 0xdddddd, 0xdddddd);
     gridHelper.position.y = 0;
     scene.add(gridHelper);
 

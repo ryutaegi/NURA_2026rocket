@@ -537,9 +537,9 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
 
   const statusDisplay = {
     broadcasting: { text: "실시간 중계 중", color: "text-red-500", icon: <Radio className="w-4 h-4 animate-pulse" /> },
-    local: { text: "로컬 연결됨", color: "text-green-500", icon: <Signal className="w-4 h-4" /> },
-    remote: { text: "원격 중계 수신 중", color: "text-blue-500", icon: <Share2 className="w-4 h-4" /> },
-    disconnected: { text: "연결 안됨", color: "text-gray-500", icon: <Signal className="w-4 h-4 opacity-50" /> }
+    local: { text: "로컬 연결됨", color: "text-green-600", icon: <Signal className="w-4 h-4" /> },
+    remote: { text: "원격 중계 수신 중", color: "text-[#ff385c]", icon: <Share2 className="w-4 h-4" /> },
+    disconnected: { text: "연결 안됨", color: "text-[#929292]", icon: <Signal className="w-4 h-4 opacity-50" /> }
   }[currentStatus];
 
   const handleEmergencyEject = () => {sendMessage({ type: 'emergency_eject' }); playSound("/sounds/ssagal.mp3");}
@@ -557,11 +557,12 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
   }, [isConnected]);
 
 
+  const cardShadow = { boxShadow: 'rgba(0,0,0,0.02) 0 0 0 1px, rgba(0,0,0,0.04) 0 2px 6px 0, rgba(0,0,0,0.1) 0 4px 8px 0' };
+
   return (
     <div className="main-dashboard-content min-h-[calc(100vh-4rem)] p-2 sm:p-4 flex flex-col lg:h-[calc(100vh-4rem)]">
       <Toaster richColors position="top-center" />
 
-      {/* 대시보드 레이아웃 강제 수정을 위한 스타일 */}
       <style>{`
         @media (min-width: 1024px) {
           .main-dashboard-content {
@@ -602,24 +603,22 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
         }
       `}</style>
 
-      {/* 배너 영역 */}
-      <div className="flex flex-col gap-2 mb-4">
-        {/* ... existing banner logic ... */}
-      </div>
-
       <div className="dashboard-grid-container flex flex-col gap-4 flex-1 lg:overflow-hidden lg:h-full">
         {/* 왼쪽: 지도 및 기울기 */}
         <div className="left-column-layout flex flex-col gap-4 lg:h-full">
-          {/* Mapbox 3D 지도 - 모바일에서 확실한 높이 보장 */}
+          {/* Mapbox 3D 지도 */}
           <div
-            className="mapbox-view-container w-full bg-gray-950 rounded-xl overflow-hidden relative border border-white/5 flex-shrink-0 lg:flex-1"
-            style={{ height: '320px' }}
+            className="mapbox-view-container w-full bg-white rounded-xl overflow-hidden relative border border-[#dddddd] flex-shrink-0 lg:flex-1"
+            style={{ height: '320px', ...cardShadow }}
           >
             <MapboxView telemetry={telemetry} />
           </div>
 
           {/* Three.js 로켓 기울기 */}
-          <div className="rocket-orientation-container w-full h-64 bg-gray-900 rounded-xl overflow-hidden border border-white/5">
+          <div
+            className="rocket-orientation-container w-full h-64 bg-white rounded-xl overflow-hidden border border-[#dddddd]"
+            style={cardShadow}
+          >
             <RocketOrientation telemetry={telemetry} />
           </div>
         </div>
@@ -627,18 +626,18 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
         {/* 오른쪽: 제어 패널 */}
         <div className="right-column-layout flex flex-col gap-4 h-full lg:overflow-y-auto hide-scrollbar">
           {/* 발사 단계 */}
-          <div className="bg-gray-900/50 backdrop-blur-sm rounded-xl p-4 border border-white/5">
+          <div className="bg-white rounded-xl p-4 border border-[#dddddd]" style={cardShadow}>
             <LaunchStages stage={telemetry.stage} />
           </div>
 
           {/* 로켓 데이터 */}
-          <div className="bg-gray-900/50 backdrop-blur-sm rounded-xl p-4 flex-1 border border-white/5">
+          <div className="bg-white rounded-xl p-4 flex-1 border border-[#dddddd]" style={cardShadow}>
             <RocketData telemetry={telemetry} rollHistory={rollHistory} />
           </div>
 
           {/* 리플레이 컨트롤 */}
           {isReplayMode && replayData && (
-            <div className="bg-gray-900/80 backdrop-blur-sm rounded-xl p-4 border border-blue-500/30 space-y-4">
+            <div className="bg-white rounded-xl p-4 border border-[#ff385c]/30 space-y-4" style={cardShadow}>
               <ReplayControls
                 currentTime={replayTime}
                 duration={replayData.duration}
@@ -654,7 +653,7 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
               />
               <button
                 onClick={handleExitReplay}
-                className="w-full bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 px-4 py-2.5 rounded-lg transition-all flex items-center justify-center gap-2 font-bold text-sm"
+                className="w-full bg-[#ff385c]/10 hover:bg-[#ff385c]/20 text-[#ff385c] border border-[#ff385c]/30 px-4 py-2.5 rounded-lg transition-all flex items-center justify-center gap-2 font-semibold text-sm"
               >
                 <RotateCcw className="h-4 w-4" />
                 실시간 모드로 전환
@@ -666,7 +665,7 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
           {!isReplayMode && isConnected && (
             <div className="space-y-3 pb-4 lg:pb-0">
               {/* 사운드 및 비상 사출 */}
-              <div className="bg-gray-900/50 backdrop-blur-sm rounded-xl p-4 border border-white/5">
+              <div className="bg-white rounded-xl p-4 border border-[#dddddd]" style={cardShadow}>
                 <div className="flex gap-3">
                   <audio ref={audioRef} src="/sounds/silent.wav" />
                   <button
@@ -677,14 +676,14 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
                         unlockAudio();
                       }
                     }}
-                    className={`flex-1 ${unlocked ? 'bg-blue-600 hover:bg-blue-500' : 'bg-yellow-600 hover:bg-yellow-500'} text-white px-4 py-3 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 font-black text-sm shadow-lg`}
+                    className="flex-1 bg-[#ff385c] hover:bg-[#e00b41] text-white px-4 py-3 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 font-semibold text-sm"
                   >
                     <Radio className="h-4 w-4" />
                     {unlocked ? "카운트다운" : "사운드 허용"}
                   </button>
                   <button
                     onClick={handleEmergencyEject}
-                    className="flex-1 bg-red-600 hover:bg-red-500 text-white px-4 py-3 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 font-black text-sm shadow-lg shadow-red-900/40"
+                    className="flex-1 bg-red-600 hover:bg-red-500 text-white px-4 py-3 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 font-semibold text-sm shadow-lg shadow-red-900/30"
                   >
                     <Circle className="h-4 w-4" />
                     비상 사출
@@ -692,22 +691,20 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
                 </div>
               </div>
 
-              
-
               {/* 기록 시작/중지 및 실시간 송신 */}
-              <div className="bg-gray-900/50 backdrop-blur-sm rounded-xl p-4 border border-white/5 space-y-3">
-              <button
+              <div className="bg-white rounded-xl p-4 border border-[#dddddd] space-y-3" style={cardShadow}>
+                <button
                   onClick={handleReset}
-                  className={`w-full px-4 py-3 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 font-black text-sm shadow-lg bg-red-600 hover:bg-red-500 text-white shadow-red-900/40 `}
+                  className="w-full px-4 py-3 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 font-semibold text-sm bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/30"
                 >
                   <Square className="h-4 w-4" />
                   보드 초기화
                 </button>
-                
+
                 {!isRecording ? (
                   <button
                     onClick={handleStartRecording}
-                    className="w-full bg-green-600 hover:bg-green-500 text-white px-4 py-3 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 font-black text-sm shadow-lg shadow-green-900/40"
+                    className="w-full bg-green-600 hover:bg-green-500 text-white px-4 py-3 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 font-semibold text-sm shadow-lg shadow-green-900/20"
                   >
                     <Square className="h-4 w-4" />
                     기록 시작
@@ -715,20 +712,20 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
                 ) : (
                   <button
                     onClick={handleStopRecording}
-                    className="w-full bg-red-600 hover:bg-red-500 text-white px-4 py-3 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 font-black text-sm shadow-lg shadow-red-900/40 animate-pulse"
+                    className="w-full bg-red-600 hover:bg-red-500 text-white px-4 py-3 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 font-semibold text-sm shadow-lg shadow-red-900/30 animate-pulse"
                   >
                     <Square className="h-4 w-4" />
                     기록 중지 및 저장
                   </button>
                 )}
 
-                {/* 실시간 송신 버튼 */}
                 <button
                   onClick={handleToggleBroadcast}
-                  className={`w-full px-4 py-3 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 font-black text-sm shadow-lg ${isBroadcasting
-                    ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-900/40 animate-pulse'
-                    : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border border-white/5'
-                    }`}
+                  className={`w-full px-4 py-3 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 font-semibold text-sm ${
+                    isBroadcasting
+                      ? 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/30 animate-pulse'
+                      : 'bg-white hover:bg-[#f7f7f7] text-[#222222] border border-[#dddddd]'
+                  }`}
                 >
                   <Share2 className="h-4 w-4" />
                   {isBroadcasting ? '실시간 송신 중지' : '실시간 송신'}
