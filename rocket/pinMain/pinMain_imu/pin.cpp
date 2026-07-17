@@ -193,13 +193,12 @@ const float NOISE_THRESHOLD = deg2rad(15.0f);
 
 
   mahony6.updateIMU(gx, gy, gz, ax, ay, az, dt);
-  mahony6.computeAngles();
-   
-
-
-
-
-  sensor_yaw = mahony6.yaw;
+  float qw, qx, qy, qz;
+mahony6.getQuaternion(&qw, &qx, &qy, &qz);
+sensor_yaw = -2.0f * atan2f(qz, qw) * (180.0f / PI);
+//atan2(2.0f*(qw*qz + qx*qy),1.0f - 2.0f*(qy*qy + qz*qz)) * (180.0f / PI);
+   //mahony6.computeAngles();
+   //sensor_yaw = mahony6.yaw;
 
 
   mahony9.update(gx, gy, gz, ax, ay, az, mx, my, mz, dt);
