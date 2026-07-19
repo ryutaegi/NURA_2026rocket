@@ -504,7 +504,7 @@ void loop() {
       getKPKD(total_speed, kp, kd);
 
       float p_term = kp * p_error;
-      float d_term = kd * (-filtered_gyro_z);
+      float d_term = kd * filtered_gyro_z;
 
       outputYaw = -(p_term + d_term) * authority;
 
