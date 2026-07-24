@@ -51,7 +51,7 @@ static const uint16_t SERVO_MIN_US = 500;
 static const uint16_t SERVO_MAX_US = 2500;
 
 static const float   SERVO_NEUTRAL_DEG1 = 100.0f;  //a급은 100.0, b급은79.0
-static const float   SERVO_NEUTRAL_DEG2 = 100.0f;  //a급은 100.0, b급은79.0
+static const float   SERVO_NEUTRAL_DEG2 = 97.0f;  //a급은 97.0, b급은 79
 static float servoDeg1 = SERVO_NEUTRAL_DEG1;
 static float servoDeg2 = SERVO_NEUTRAL_DEG2;
 // [설정] 서보 물리적 제한 각도
@@ -469,7 +469,7 @@ void loop() {
 
       // 1. 센서 각도 랩핑(Wrapping) 및 180도 경계선 스파이크 방지
       float yaw_deg = wrap720_deg(flightData.filterRoll);  // 0~720
-      if (yaw_deg > 360.0f) yaw_deg -= 720.0f;  // -360~360 변환
+      if (yaw_deg > 1440.0f) yaw_deg -= 2880.0f;  // -360~360 변환
 
       // 이전 각도와의 차이를 비교하여 180도 / -180도 경계선 점프 현상 보정
       float diff = yaw_deg - prev_yaw;

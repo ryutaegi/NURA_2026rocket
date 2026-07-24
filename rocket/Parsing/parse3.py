@@ -129,8 +129,14 @@ def detect_headerless_record_size(file_size: int):
         return candidates[0]
 
     if len(candidates) > 1:
-        # Prefer the current format when both happen to divide evenly.
-        return REC_SIZE_111
+        # 최신 FlightData 구조인 115바이트를 우선 선택
+        if REC_SIZE_115 in candidates:
+            return REC_SIZE_115
+
+        if REC_SIZE_111 in candidates:
+            return REC_SIZE_111
+
+        return REC_SIZE_103
 
     return None
 
