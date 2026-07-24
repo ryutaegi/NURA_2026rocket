@@ -50,8 +50,8 @@ static const uint8_t  MOTOR_CH2   = 15;
 static const uint16_t SERVO_MIN_US = 500;
 static const uint16_t SERVO_MAX_US = 2500;
 
-static const float   SERVO_NEUTRAL_DEG1 = 79.0f;  //a급은 79.0
-static const float   SERVO_NEUTRAL_DEG2 = 79.0f;  //a급은 79.0
+static const float   SERVO_NEUTRAL_DEG1 = 100.0f;  //a급은 100.0, b급은79.0
+static const float   SERVO_NEUTRAL_DEG2 = 100.0f;  //a급은 100.0, b급은79.0
 static float servoDeg1 = SERVO_NEUTRAL_DEG1;
 static float servoDeg2 = SERVO_NEUTRAL_DEG2;
 // [설정] 서보 물리적 제한 각도
