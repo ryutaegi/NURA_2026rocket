@@ -532,11 +532,11 @@ void loop() {
       prevErrorYaw = errorYaw;
 
       // ================= 디버그 출력 (3축 속도 + 지구 Z 가속도) =================
-      // Serial.print("Vel:");   Serial.print(total_speed / 100, 2);  // m/s (3축 벡터 크기)
-      // Serial.print("\tvx:");  Serial.print(vel_ex / 100, 2);       // m/s (지구 X)
-      // Serial.print("\tvy:");  Serial.print(vel_ey / 100, 2);       // m/s (지구 Y)
-      // Serial.print("\tvz:");  Serial.print(vel_ez / 100, 2);       // m/s (지구 Z 수직)
-      // Serial.print("\taez:"); Serial.println(aez, 2);              // 지구 Z 선가속 (cm/s^2)
+      Serial.print("Vel:");   Serial.print(total_speed / 100, 2);  // m/s (3축 벡터 크기)
+      Serial.print("\tvx:");  Serial.print(vel_ex / 100, 2);       // m/s (지구 X)
+      Serial.print("\tvy:");  Serial.print(vel_ey / 100, 2);       // m/s (지구 Y)
+      Serial.print("\tvz:");  Serial.print(vel_ez / 100, 2);       // m/s (지구 Z 수직)
+      Serial.print("\taez:"); Serial.println(aez, 2);              // 지구 Z 선가속 (cm/s^2)
     }
   }
 

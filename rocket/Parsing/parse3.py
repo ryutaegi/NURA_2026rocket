@@ -30,9 +30,11 @@ FLIGHT_STATE = [
 # -----------------------------------------------------------------------------
 FMT_103 = "<6f4f2i3fBB5f4IBI"
 FMT_111 = "<6f4f2i3fBB7f4IBI"
+FMT_115 = "<6f4f2i3fBB8f4IBI"
 
 REC_SIZE_103 = struct.calcsize(FMT_103)
 REC_SIZE_111 = struct.calcsize(FMT_111)
+REC_SIZE_115 = struct.calcsize(FMT_115)
 
 COLUMNS_103 = [
     "imu_ax", "imu_ay", "imu_az", "imu_gx", "imu_gy", "imu_gz",
@@ -57,9 +59,49 @@ COLUMNS_111 = [
     "stateStr",
 ]
 
+COLUMNS_115 = [
+    "imu_ax", "imu_ay", "imu_az",
+    "imu_gx", "imu_gy", "imu_gz",
+
+    "baro_pressure_hPa",
+    "baro_temperature_C",
+    "baro_altitude_m",
+    "baro_climbRate_mps",
+
+    "gps_latE7",
+    "gps_lonE7",
+    "gps_altitude_m",
+    "gps_speed_mps",
+    "gps_heading_deg",
+    "gps_sats",
+    "gps_fix",
+
+    "roll_deg",
+    "filterRoll_deg",
+    "pitch_deg",
+    "yaw_deg",
+
+    "veltotal_cmps",
+    "velimu_cmps",
+
+    "servoDeg1_deg",
+    "servoDeg2_deg",
+
+    "baroTimeMs",
+    "gpsTimeMs",
+    "aTimeMs",
+    "aRxTimeMs",
+
+    "state",
+    "timeMs",
+
+    "stateStr",
+]
+
 LAYOUTS = {
     REC_SIZE_103: (FMT_103, COLUMNS_103, "old-103"),
     REC_SIZE_111: (FMT_111, COLUMNS_111, "current-111"),
+    REC_SIZE_115: (FMT_115, COLUMNS_115, "current-115"),
 }
 
 
