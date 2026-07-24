@@ -29,7 +29,7 @@ float wrap720_deg(float d){
 
 float wrap360_deg(float d){
   while (d < 0.0f) d += 360.0f;
-  while (d >= 720.0f) d -= 360.0f;
+  while (d >= 360.0f) d -= 360.0f;
   return d;
 }
 
