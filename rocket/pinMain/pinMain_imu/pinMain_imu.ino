@@ -511,8 +511,8 @@ void loop() {
       // -----------------------------------------------------------------
       // 6. 서보 모터 각도 적용 및 출력
       // -----------------------------------------------------------------
-      // 서보 모터 각도 적용 (발사 후 1.5초 이후부터 제어 시작)
-      bool controlActive = launchTimerStarted && (millis() - launchTimeMs >= 2000);
+      // 서보 모터 각도 적용 (발사 1초 이후부터 제어 시작)
+      bool controlActive = launchTimerStarted && (millis() - launchTimeMs >= 1000);
 
       if (controlActive) {
         servoDeg1 = SERVO_NEUTRAL_DEG1 + outputYaw;

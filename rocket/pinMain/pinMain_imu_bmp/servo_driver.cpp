@@ -22,14 +22,14 @@ void writeServoDeg(uint8_t ch, float deg){
 }
 
 float wrap720_deg(float d){
-  while (d < 0.0f) d += 720.0f;
-  while (d >= 720.0f) d -= 720.0f;
+  while (d < 0.0f) d += 2880.0f;
+  while (d >= 2880.0f) d -= 2880.0f;
   return d;
 }
 
 float wrap360_deg(float d){
   while (d < 0.0f) d += 360.0f;
-  while (d >= 720.0f) d -= 360.0f;
+  while (d >= 360.0f) d -= 360.0f;
   return d;
 }
 
