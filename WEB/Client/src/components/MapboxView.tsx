@@ -173,7 +173,7 @@ export default function MapboxView({ telemetry }: MapboxViewProps) {
       );
 
       model.position.copy(relativePosition);
-      model.quaternion.set(telemetry.q1, telemetry.q2, telemetry.q3, telemetry.q0);
+      model.quaternion.set(telemetry.q1, telemetry.q3, -telemetry.q2, telemetry.q0);
 
       const index = pointIndexRef.current;
       const linePositions = line.geometry.attributes.position.array as Float32Array;
