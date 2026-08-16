@@ -88,6 +88,7 @@ export default function MapboxView({ telemetry }: MapboxViewProps) {
         const lineGeometry = new THREE.BufferGeometry();
         const positions = new Float32Array(MAX_POINTS * 3);
         lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        lineGeometry.setDrawRange(0, 0);
         const line = new THREE.Line(lineGeometry, lineMaterial);
         lineRef.current = line;
         (this as any).scene.add(line);
@@ -100,7 +101,7 @@ export default function MapboxView({ telemetry }: MapboxViewProps) {
         });
         (this as any).renderer.autoClear = false;
       },
-      render: function (gl, matrix) {
+      render: function (_gl, matrix) {
         const m = new THREE.Matrix4().fromArray(matrix);
         const l = new THREE.Matrix4().makeTranslation(
           modelAsMercatorCoordinate.x,
@@ -172,11 +173,7 @@ export default function MapboxView({ telemetry }: MapboxViewProps) {
       );
 
       model.position.copy(relativePosition);
-      model.rotation.set(
-        telemetry.roll * (Math.PI / 180),
-        telemetry.pitch * (Math.PI / 180) + Math.PI / 2,
-        telemetry.yaw * (Math.PI / 180)
-      );
+      model.quaternion.set(telemetry.q1, telemetry.q2, telemetry.q3, telemetry.q0);
 
       const index = pointIndexRef.current;
       const linePositions = line.geometry.attributes.position.array as Float32Array;
