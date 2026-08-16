@@ -49,8 +49,8 @@ static const uint8_t  MOTOR_CH2   = 15;
 static const uint16_t SERVO_MIN_US = 500;
 static const uint16_t SERVO_MAX_US = 2500;
 
-static const float   SERVO_NEUTRAL_DEG1 = 87.5f;  // b급 로켓 중립각 94.5
-static const float   SERVO_NEUTRAL_DEG2 = 73.5f;  // b급 로켓 중립각 78.5
+static const float   SERVO_NEUTRAL_DEG1 = 79.5f;  // b급 로켓 중립각 94.5
+static const float   SERVO_NEUTRAL_DEG2 = 79.5f;  // b급 로켓 중립각 78.5
 static float servoDeg1 = SERVO_NEUTRAL_DEG1;
 static float servoDeg2 = SERVO_NEUTRAL_DEG2;
 // [설정] 서보 물리적 제한 각도
@@ -157,8 +157,6 @@ void sendAtoB() {
   push_i16_le(buf, idx, s16_scale(servoDeg2, 100.0f));
 
   // 전송 바이트 수 검증
-  // Header before payload = 11 bytes
-  // idx should now be 11 + LEN = 39
   if (idx != 11 + LEN) {
     return;
   }
@@ -174,7 +172,6 @@ void softwareReset() {
   wdt_enable(WDTO_15MS);  // 15ms 후 리셋
   while (1) {}            // 대기 → WDT 트리거
 }
-
 
 static const uint8_t B2A_SYNC1 = 0xB5;
 static const uint8_t B2A_SYNC2 = 0x5B;
@@ -193,28 +190,18 @@ static const uint8_t B2A_MAX_LEN = 16;
 // ============================================================
 // B보드에서 수신한 기압 기반 상승률
 // ============================================================
-
 // 단위: m/s
 // 상승 중 +, 하강 중 -
 float ClimbRate = 0.0f;
-
-// 정상 상승률 패킷을 마지막으로 받은 시각
 uint32_t ClimbRateRxMs = 0;
-
-// B보드가 패킷에 넣어 보낸 시간
 uint32_t ClimbRateTimeMs = 0;
-
-// 상승률 패킷 정상 수신 여부
 bool ClimbRateValid = false;
-
 
 // ============================================================
 // Little-endian 읽기 함수
 // ============================================================
-
 static inline uint16_t rd_u16_le(const uint8_t* p) {
-  return (uint16_t)p[0]
-       | ((uint16_t)p[1] << 8);
+  return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
 }
 
 static inline int16_t rd_i16_le(const uint8_t* p) {
@@ -222,10 +209,7 @@ static inline int16_t rd_i16_le(const uint8_t* p) {
 }
 
 static inline uint32_t rd_u32_le(const uint8_t* p) {
-  return (uint32_t)p[0]
-       | ((uint32_t)p[1] << 8)
-       | ((uint32_t)p[2] << 16)
-       | ((uint32_t)p[3] << 24);
+  return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
 void pollB2A(Stream& link, uint32_t nowMs) {
@@ -238,7 +222,6 @@ void pollB2A(Stream& link, uint32_t nowMs) {
   };
 
   static ParseState state = WAIT_SYNC1;
-
   static uint8_t hdr[5];
   static uint8_t payload[B2A_MAX_LEN];
   static uint8_t crcBytes[2];
@@ -253,13 +236,9 @@ void pollB2A(Stream& link, uint32_t nowMs) {
     B2A_rxByteCount++;
 
     switch (state) {
-
       case WAIT_SYNC1:
-        if (b == B2A_SYNC1) {
-          state = WAIT_SYNC2;
-        }
+        if (b == B2A_SYNC1) state = WAIT_SYNC2;
         break;
-
       case WAIT_SYNC2:
         if (b == B2A_SYNC2) {
           hdrIdx = 0;
@@ -268,42 +247,32 @@ void pollB2A(Stream& link, uint32_t nowMs) {
           state = WAIT_SYNC1;
         }
         break;
-
       case READ_HEADER:
         hdr[hdrIdx++] = b;
-
         if (hdrIdx >= 5) {
           uint8_t version = hdr[0];
           uint8_t len = hdr[2];
-
           if (version != B2A_VER || len > B2A_MAX_LEN) {
             state = WAIT_SYNC1;
             break;
           }
-
           payloadLen = len;
           payloadIdx = 0;
           crcIdx = 0;
-
           state = (payloadLen == 0) ? READ_CRC : READ_PAYLOAD;
         }
         break;
-
       case READ_PAYLOAD:
         payload[payloadIdx++] = b;
-
         if (payloadIdx >= payloadLen) {
           crcIdx = 0;
           state = READ_CRC;
         }
         break;
-
       case READ_CRC:
         crcBytes[crcIdx++] = b;
-        
         if (crcIdx >= 2) {
           uint8_t crcBuf[5 + B2A_MAX_LEN];
-
           memcpy(crcBuf, hdr, 5);
           memcpy(crcBuf + 5, payload, payloadLen);
 
@@ -312,40 +281,21 @@ void pollB2A(Stream& link, uint32_t nowMs) {
 
           if (crcCalc == crcRecv) {
             uint8_t msg = hdr[1];
-
-            // ------------------------------------------------
-            // 0x31: 기존 원격 리셋 명령
-            // ------------------------------------------------
             if (msg == B2A_MSG_RESET) {
               Serial.println("reboot");
-            //if (payloadLen >= 1 && payload[0] == 1) {
-            softwareReset();
-         //}
-        }
-
-            // ------------------------------------------------
-            // 0x32: 상승률 수신
-            //
-            // payload[0..1] = ClimbRate × 100, int16_t
-            // payload[2..5] = B보드 timestamp, uint32_t
-            // ------------------------------------------------
+              softwareReset();
+            }
             else if (msg == B2A_MSG_CLIMBRATE && payloadLen == 6) {
               B2A_climbPacketCount++;
               int16_t climbRateX100 = rd_i16_le(&payload[0]);
-
-              // 예: 1234 → 12.34 m/s
               ClimbRate = climbRateX100 / 100.0f;
-
               ClimbRateTimeMs = rd_u32_le(&payload[2]);
               ClimbRateRxMs = nowMs;
               ClimbRateValid = true;
             }
+          } else {
+            B2A_crcFailCount++;
           }
-          else {
-  B2A_crcFailCount++;
-}
-          
-
           state = WAIT_SYNC1;
         }
         break;
@@ -360,7 +310,6 @@ void setup() {
 
   WIRE_PORT.begin();
   WIRE_PORT.setClock(400000);
-  // 선이 빠졌을 때 Arduino가 멈추지 않게 함
   Wire.setWireTimeout(3000, true);
 
   pca9685.begin();
@@ -371,19 +320,14 @@ void setup() {
   writeServoDeg(MOTOR_CH2, SERVO_NEUTRAL_DEG2);
 
   pinMode(PIN_CONNECT_DETECT, INPUT_PULLUP);
-  if (digitalRead(PIN_CONNECT_DETECT) == LOW)
-  {
+  if (digitalRead(PIN_CONNECT_DETECT) == LOW) {
     sweepOnce();
     delay(10);
-  }
-  else
-  {
+  } else {
     writeServoDeg(MOTOR_CH1, SERVO_NEUTRAL_DEG1);
     writeServoDeg(MOTOR_CH2, SERVO_NEUTRAL_DEG2);
-      //sweepOnce();
   }
 
-  // 분리한 설정 함수 호출
   bool ok = false;
   while(!ok){
     if (configureIMU()) {
@@ -400,9 +344,8 @@ void setup() {
 
 void loop() {
   pollB2A(Serial3, millis());
-  // ================= IMU 자동 복구 =================
 
-  // 데이터 읽기 시도
+  // ================= IMU 자동 복구 =================
   bool dataAvailable = false;
   if (myICM.dataReady()) {
     myICM.getAGMT();
@@ -410,12 +353,10 @@ void loop() {
     lastImuDataMs = millis();
   }
 
-  // 타임아웃 감지 (선이 뽑힘)
-  // 500ms 동안 데이터가 안 들어오면 연결끊김으로 판단
   if (millis() - lastImuDataMs > 500) {
     isImuHealthy = false;
   }
-  // 센서고장판단
+  
   if (millis() - lastImuDataMs > 3000){
     flightData.filterRoll = 0;
     flightData.imu.ax = 10000;
@@ -424,19 +365,15 @@ void loop() {
     Serial.println("센서 고장 판단 (3초)");
   }
 
-  // 센서가 비정상일 때 복구 시도
   if (!isImuHealthy) {
-    // 안전을 위해 서보 중립
     flightData.filterRoll = 0;
     writeServoDeg(MOTOR_CH1, SERVO_NEUTRAL_DEG1);
     writeServoDeg(MOTOR_CH2, SERVO_NEUTRAL_DEG2);
 
-    // 0.5초마다 재연결 시도
     if (millis() - lastResetAttemptMs > 500) {
       lastResetAttemptMs = millis();
       Serial.println(F("연결 끊김"));
       flightData.filterRoll = 0;
-      // Wire 버스 리셋 시도 (선이 다시 꽂혔을 때를 대비)
       WIRE_PORT.end();
       WIRE_PORT.begin();
       WIRE_PORT.setClock(400000);
@@ -448,22 +385,17 @@ void loop() {
     }
   }
 
-  // 데이터가 있으면 실행, 데이터 유무 상관 없이 센서통신낙하산보드로 전송
   if (dataAvailable && isImuHealthy) {
-
-    processIMU();  // 상보필터 업데이트
+    processIMU();  
 
     bool isSpike = (abs(myICM.accX()) > ACCEL_AXIS_LIMIT) || (abs(myICM.accY()) > ACCEL_AXIS_LIMIT) || (abs(myICM.accZ()) > ACCEL_AXIS_LIMIT);
 
     if (isSpike) {
       spikeCounter++;
-
       if (spikeCounter >= MAX_SPIKE_COUNT) {
-        // [n회 이상 연속] -> 센서 고장으로 판단
         flightData.filterRoll = 0;
         writeServoDeg(MOTOR_CH1, SERVO_NEUTRAL_DEG1);
         writeServoDeg(MOTOR_CH2, SERVO_NEUTRAL_DEG2);
-
         flightData.imu.ax = 10000;
         flightData.imu.ay = 10000;
         flightData.imu.az = 10000;
@@ -472,7 +404,6 @@ void loop() {
     }
 
     static float last_yaw_deg = 0.0f;
-
     unsigned long currentTime = micros();
     float dt = (currentTime - prevTimePD) / 1000000.0f;
     prevTimePD = currentTime;
@@ -480,12 +411,9 @@ void loop() {
     float gravityX, gravityY, gravityZ;
     mahony0.updateIMU(gx_f, gy_f, gz_f, ax_f, ay_f, az_f, dt);
     mahony0.computeAngles();
-
     mahony0.getGravityVector(&gravityX, &gravityY, &gravityZ);
 
-    // ================= 변수 선언부 =================
     const float GRAVITY = 980.665f;
-
     const float P_DEADZONE_DEG = 1.5f;
     const float V_CONTROL_START = 0.0f;
     const float V_CONTROL_FULL  = 2000.0f;
@@ -493,18 +421,14 @@ void loop() {
     static float filtered_gyro_z = 0.0f;
     const float GYRO_LPF_ALPHA = 0.2f;
 
-    // ================= 3축 속도 추정 (지구고정좌표계 적분) =================
-    // 1. 중력 제거한 바디프레임 선가속 (3축)
     float lin_bx = flightData.imu.ax - GRAVITY * gravityX;
     float lin_by = flightData.imu.ay - GRAVITY * gravityY;
     float lin_bz = flightData.imu.az - GRAVITY * gravityZ;
 
-    // 2. 현재 자세 쿼터니언
     float qw, qx, qy, qz;
     mahony0.getQuaternion(&qw, &qx, &qy, &qz);
 
     unsigned long currentTimeVel = micros();
-
     static bool velTimeInit = false;
     if (!velTimeInit) {
       prevTimeVel = currentTimeVel;
@@ -512,7 +436,6 @@ void loop() {
     }
 
     bool launched = (digitalRead(PIN_CONNECT_DETECT) == HIGH);
-
     static bool prevLaunched = false;
     if (launched && !prevLaunched) {
       vel_ex = vel_ey = vel_ez = 0.0f;
@@ -525,9 +448,7 @@ void loop() {
 
     float aex = 0.0f, aey = 0.0f, aez = 0.0f;
 
-    // 3. 발사 전 바이어스 캘리브레이션 + 발사 후 속도 융합(상보필터)
     if (!launched) {
-      // 패드 정지 시 바디프레임 선가속 잔여값을 바이어스로 산출
       bias_acc_x += lin_bx; bias_acc_y += lin_by; bias_acc_z += lin_bz;
       bias_n++;
       bias_bx = bias_acc_x / (float)bias_n;
@@ -535,36 +456,40 @@ void loop() {
       bias_bz = bias_acc_z / (float)bias_n;
       vel_ex = vel_ey = vel_ez = 0.0f;
     } else {
-      // 3-1. 바디프레임 바이어스 보정 (데드존 삭제)
       float bx = lin_bx - bias_bx;
       float by = lin_by - bias_by;
       float bz = lin_bz - bias_bz;
 
-      // 3-2. 지구고정좌표계로 회전 변환
       aex = (qw*qw+qx*qx-qy*qy-qz*qz)*bx + 2.0f*(qx*qy-qw*qz)*by       + 2.0f*(qx*qz+qw*qy)*bz;
       aey = 2.0f*(qx*qy+qw*qz)*bx       + (qw*qw-qx*qx+qy*qy-qz*qz)*by + 2.0f*(qy*qz-qw*qx)*bz;
       aez = 2.0f*(qx*qz-qw*qy)*bx       + 2.0f*(qw*qx+qy*qz)*by       + (qw*qw-qx*qx-qy*qy+qz*qz)*bz;
 
-      // 3-3. 지구고정좌표계 속도 산출
-      // X, Y축: 기준 데이터가 없으므로 가속도 단순 적분 (수평 방향 표류 오차 주의)
       vel_ex += aex * dtt;
       vel_ey += aey * dtt;
 
-      // Z축: IMU 가속도와 기압계(BMP280) 데이터 상보 필터 융합
-      const float ALPHA_Z = 0.999f; // 필터 계수 (필요시 0.95 ~ 0.99 튜닝)
-      float baro_vz = ClimbRate * 100.0f; // m/s를 cm/s로 단위 통일
+      // Z축: [비동기 퓨전 적용] IMU 적분으로 고주파수 예측 (지연 없음)
+      vel_ez += aez * dtt; 
 
-      vel_ez = ALPHA_Z * (vel_ez + aez * dtt) + (1.0f - ALPHA_Z) * baro_vz;
+      // B보드에서 '새로운' 기압 기반 상승률 데이터가 수신된 시점에만 보정 수행 (Correct)
+      static uint32_t lastProcessedClimbMs = 0;
+      if (ClimbRateValid && (ClimbRateRxMs != lastProcessedClimbMs)) {
+        lastProcessedClimbMs = ClimbRateRxMs;
+        
+        float baro_vz = ClimbRate * 100.0f; // m/s -> cm/s 단위 통일
+        
+        // 기압계 데이터와의 오차를 보정 이득(K)만큼 반영. 
+        const float K_BARO = 0.05f; 
+        vel_ez = vel_ez + K_BARO * (baro_vz - vel_ez);
+      }
     }
 
-    // 4. 3축 속도 벡터 크기
     float total_speed = sqrt(vel_ex*vel_ex + vel_ey*vel_ey + vel_ez*vel_ez);
     flightData.veltotal = vel_ez;
-    flightData.velimu =vel_ez + aez * dtt;
-    // ================= 롤 제어 =================
+    flightData.velimu = vel_ez + aez * dtt;
+
     if (dt > 0.0f) {
       float yaw_deg = wrap720_deg(flightData.filterRoll);  
-      if (yaw_deg > 360.0f) yaw_deg -= 720.0f;  
+      if (yaw_deg > 1440.0f) yaw_deg -= 2880.0f;  
 
       float diff = yaw_deg - prev_yaw;
       if (diff > 180.0f) yaw_deg -= 360.0f;        
@@ -603,14 +528,17 @@ void loop() {
 
       prevErrorYaw = errorYaw;
 
-      // ================= 디버그 출력 =================
-       Serial.print("Veltotal:");   Serial.print(flightData.veltotal / 100, 2);  // m/s (3축 벡터 크기)
-      Serial.print("Velimu:");   Serial.print(flightData.velimu / 100, 2);
-      Serial.print("servoDeg1:");  Serial.print(servoDeg1); 
-      Serial.print("servoDeg2:");  Serial.print(servoDeg2);  
-      Serial.print("filterRoll:");  Serial.println(flightData.filterRoll); 
-      Serial.print("FlightData size = ");
-Serial.println(sizeof(FlightData));             
+      // ================= 디버그 출력 (병목 해결) =================
+      // 출력 주기를 10Hz로 제한하여 메인 루프 Blocking 방지
+      if (millis() - lastDbgMs >= 100) {
+        lastDbgMs = millis();
+        // Serial.print("Veltotal:");   Serial.print(flightData.veltotal / 100.0f, 2); 
+        // Serial.print("  Velimu:");   Serial.print(flightData.velimu / 100.0f, 2);
+        // Serial.print("  servoDeg1:");  Serial.print(servoDeg1); 
+        // Serial.print("  servoDeg2:");  Serial.print(servoDeg2);  
+        // Serial.print("  filterRoll:");  Serial.println(flightData.filterRoll); 
+        // Serial.println(ClimbRate); 
+      }
     }
   }
 
