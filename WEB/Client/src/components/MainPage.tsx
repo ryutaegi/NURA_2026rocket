@@ -611,7 +611,7 @@ export default function MainPage({ centerAlign, emergencyEjection }: MainPagePro
             className="mapbox-view-container w-full bg-white rounded-xl overflow-hidden relative border border-[#dddddd] flex-shrink-0 lg:flex-1"
             style={{ height: '320px', ...cardShadow }}
           >
-            <MapboxView telemetry={telemetry} />
+            <MapboxView telemetry={telemetry} resetLine={isReplayMode} />
           </div>
 
           {/* Three.js 로켓 기울기 */}

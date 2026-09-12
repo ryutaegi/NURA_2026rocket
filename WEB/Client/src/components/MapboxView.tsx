@@ -7,26 +7,30 @@ import { RocketTelemetry } from './MainPage';
 
 interface MapboxViewProps {
   telemetry: RocketTelemetry;
+  resetLine?: boolean;
 }
 
-// Vite 환경 변수를 사용하여 Mapbox Access Token 설정
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
 
 const modelOrigin = [126.9780, 37.5665] as [number, number];
 const modelAltitude = 0;
+const MAX_POINTS = 10000;
+// ~3m in Mercator units: 3 × 3.03e-8 ≈ 9e-8
+// 동일 GPS 좌표(패킷 0-90)가 연속으로 들어올 때 Line 방향벡터가 0이 되는 버그를 막음
+const MIN_MERCATOR_MOVE = 9e-8;
 
 const modelAsMercatorCoordinate = mapboxgl.MercatorCoordinate.fromLngLat(
   { lng: modelOrigin[0], lat: modelOrigin[1] },
   modelAltitude
 );
 
-export default function MapboxView({ telemetry }: MapboxViewProps) {
+export default function MapboxView({ telemetry, resetLine }: MapboxViewProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<mapboxgl.Map | null>(null);
-  const modelRef = useRef<THREE.Group>(null!);
-  const lineRef = useRef<THREE.Line>(null!);
-  const customLayerRef = useRef<CustomLayerInterface>(null!);
-  const pointIndexRef = useRef(0);
+  const mapRef          = useRef<mapboxgl.Map | null>(null);
+  const rocketGroupRef  = useRef<THREE.Group | null>(null);
+  const trajGeoRef      = useRef<THREE.BufferGeometry | null>(null);
+  const pointIndexRef   = useRef(0);
+  const lastPosRef      = useRef<{ x: number; y: number; z: number } | null>(null);
 
   useEffect(() => {
     if (mapRef.current || !mapContainerRef.current) return;
@@ -43,83 +47,104 @@ export default function MapboxView({ telemetry }: MapboxViewProps) {
 
     mapRef.current = map;
 
-    const resizeObserver = new ResizeObserver(() => {
-      map.resize();
-    });
-
+    const resizeObserver = new ResizeObserver(() => map.resize());
     resizeObserver.observe(mapContainerRef.current);
 
-    // Three.js 3D 모델을 위한 커스텀 레이어
     const customLayer: CustomLayerInterface = {
-      id: '3d-model',
+      id: '3d-scene',
       type: 'custom',
       renderingMode: '3d',
-      onAdd: function (map, gl) {
-        (this as any).camera = new THREE.Camera();
-        (this as any).scene = new THREE.Scene();
+      onAdd(_map, gl) {
+        (this as any).camera   = new THREE.Camera();
+        (this as any).scene    = new THREE.Scene();
+        (this as any).sceneMap = _map;
 
-        // 조명 추가
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
-        (this as any).scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 2.5);
-        directionalLight.position.set(0, -70, 100).normalize();
-        (this as any).scene.add(directionalLight);
+        // 조명
+        const amb = new THREE.AmbientLight(0xffffff, 1.5);
+        (this as any).scene.add(amb);
+        const dir = new THREE.DirectionalLight(0xffffff, 2.5);
+        dir.position.set(0, -70, 100).normalize();
+        (this as any).scene.add(dir);
 
-        // GLTF 모델 로드
+        // 로켓 그룹
+        const rocketGroup = new THREE.Group();
+        rocketGroupRef.current = rocketGroup;
+        (this as any).scene.add(rocketGroup);
+
+        const modelFixGroup = new THREE.Group();
+        modelFixGroup.rotation.x = Math.PI / 2;
+        rocketGroup.add(modelFixGroup);
+
         const loader = new GLTFLoader();
         loader.load(
           '/sci-fi_rocket/scene.gltf',
           (gltf) => {
             const model = gltf.scene;
-            const scale = modelAsMercatorCoordinate.meterInMercatorCoordinateUnits() * 30;
+            const scale = modelAsMercatorCoordinate.meterInMercatorCoordinateUnits() * 10;
             model.scale.set(scale, scale, scale);
-            modelRef.current = model;
-            (this as any).scene.add(model);
+            modelFixGroup.add(model);
           },
           undefined,
-          (error) => {
-            console.error('3D 모델을 로드하는 중 오류 발생:', error);
-          }
+          (err) => console.error('GLTF 로드 오류:', err)
         );
 
-        // Trajectory Line
-        const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
-        const MAX_POINTS = 10000;
-        const lineGeometry = new THREE.BufferGeometry();
+        // ── 궤적 시각화 ──────────────────────────────────────────────────
+        // Line2는 방향벡터가 0인 중복 점에서 무너짐 → Points + Line으로 교체
+        // Points: 6px 빨간 점(sizeAttenuation:false = 화면 픽셀 고정 크기)
+        // Line:   1px 연결선
+        // 두 오브젝트가 동일 BufferGeometry 공유 → 한 번 업데이트로 둘 다 갱신
+        const trajGeo = new THREE.BufferGeometry();
         const positions = new Float32Array(MAX_POINTS * 3);
-        lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        lineGeometry.setDrawRange(0, 0);
-        const line = new THREE.Line(lineGeometry, lineMaterial);
-        lineRef.current = line;
-        (this as any).scene.add(line);
+        trajGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        trajGeo.setDrawRange(0, 0);
+        trajGeoRef.current = trajGeo;
 
-        (this as any).map = map;
+        const pointsMat = new THREE.PointsMaterial({
+          color: 0xff2222,
+          size: 6,
+          depthTest: false,
+          depthWrite: false,
+          transparent: true,
+          sizeAttenuation: false,  // 화면 픽셀 단위 고정 크기
+        });
+        const trajPoints = new THREE.Points(trajGeo, pointsMat);
+        trajPoints.renderOrder = 999;
+        trajPoints.frustumCulled = false;  // pre-alloc 버퍼가 (0,0,0)으로 채워져 있어 바운딩 스피어가 Seoul → frustum culled됨 방지
+        (this as any).scene.add(trajPoints);
+
+        const lineMat = new THREE.LineBasicMaterial({
+          color: 0xff2222,
+          depthTest: false,
+          depthWrite: false,
+          transparent: true,
+        });
+        const trajLine = new THREE.Line(trajGeo, lineMat);
+        trajLine.renderOrder = 998;
+        trajLine.frustumCulled = false;
+        (this as any).scene.add(trajLine);
+
         (this as any).renderer = new THREE.WebGLRenderer({
-          canvas: map.getCanvas(),
+          canvas: _map.getCanvas(),
           context: gl,
           antialias: true,
         });
         (this as any).renderer.autoClear = false;
       },
-      render: function (_gl, matrix) {
+      render(_gl, matrix) {
         const m = new THREE.Matrix4().fromArray(matrix);
         const l = new THREE.Matrix4().makeTranslation(
           modelAsMercatorCoordinate.x,
           modelAsMercatorCoordinate.y,
           modelAsMercatorCoordinate.z
         );
-
         (this as any).camera.projectionMatrix = m.multiply(l);
         (this as any).renderer.resetState();
         (this as any).renderer.render((this as any).scene, (this as any).camera);
-        (this as any).map.triggerRepaint();
+        (this as any).sceneMap.triggerRepaint();
       },
     };
 
-    customLayerRef.current = customLayer;
-
     map.on('load', () => {
-      map.addLayer(customLayer);
       map.addSource('mapbox-dem', {
         type: 'raster-dem',
         url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
@@ -128,74 +153,94 @@ export default function MapboxView({ telemetry }: MapboxViewProps) {
       map.addLayer({
         id: 'sky',
         type: 'sky',
-        paint: {
-          'sky-type': 'atmosphere',
-          'sky-atmosphere-sun-intensity': 5,
-        },
+        paint: { 'sky-type': 'atmosphere', 'sky-atmosphere-sun-intensity': 5 },
       });
+      map.addLayer(customLayer);
 
-      // 초기 렌더링 시 리사이즈 강제 호출
-      setTimeout(() => {
-        map.resize();
-      }, 100);
-      setTimeout(() => {
-        map.resize();
-      }, 1000);
+      setTimeout(() => map.resize(), 100);
+      setTimeout(() => map.resize(), 1000);
     });
 
-    // 윈도우 리사이즈 이벤트 대응
-    const handleWindowResize = () => map.resize();
-    window.addEventListener('resize', handleWindowResize);
+    const handleResize = () => map.resize();
+    window.addEventListener('resize', handleResize);
 
     return () => {
       resizeObserver.disconnect();
-      window.removeEventListener('resize', handleWindowResize);
+      window.removeEventListener('resize', handleResize);
       map.remove();
-      mapRef.current = null;
+      mapRef.current         = null;
+      rocketGroupRef.current = null;
+      trajGeoRef.current     = null;
+      pointIndexRef.current  = 0;
+      lastPosRef.current     = null;
     };
   }, []);
 
+  // 리플레이 시작 시 궤적 초기화
   useEffect(() => {
-    if (mapRef.current && modelRef.current && lineRef.current && customLayerRef.current) {
-      const map = mapRef.current;
-      const model = modelRef.current;
-      const line = lineRef.current;
+    const geo = trajGeoRef.current;
+    if (!geo) return;
+    const positions = geo.attributes.position.array as Float32Array;
+    positions.fill(0);
+    geo.attributes.position.needsUpdate = true;
+    geo.setDrawRange(0, 0);
+    pointIndexRef.current = 0;
+    lastPosRef.current    = null;
+  }, [resetLine]);
 
-      const currentMercator = mapboxgl.MercatorCoordinate.fromLngLat(
-        { lng: telemetry.longitude, lat: telemetry.latitude },
-        telemetry.altitude
+  // 텔레메트리 업데이트
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const currentMercator = mapboxgl.MercatorCoordinate.fromLngLat(
+      { lng: telemetry.longitude, lat: telemetry.latitude },
+      telemetry.altitude
+    );
+
+    const rel = new THREE.Vector3(
+      currentMercator.x - modelAsMercatorCoordinate.x,
+      currentMercator.y - modelAsMercatorCoordinate.y,
+      currentMercator.z - modelAsMercatorCoordinate.z
+    );
+
+    // 로켓 위치·자세
+    if (rocketGroupRef.current) {
+      rocketGroupRef.current.position.copy(rel);
+      rocketGroupRef.current.quaternion.set(
+        telemetry.q1, telemetry.q2, telemetry.q3, telemetry.q0
       );
-
-      const relativePosition = new THREE.Vector3(
-        currentMercator.x - modelAsMercatorCoordinate.x,
-        currentMercator.y - modelAsMercatorCoordinate.y,
-        currentMercator.z - modelAsMercatorCoordinate.z
-      );
-
-      model.position.copy(relativePosition);
-      model.quaternion.set(telemetry.q1, telemetry.q3, -telemetry.q2, telemetry.q0);
-
-      const index = pointIndexRef.current;
-      const linePositions = line.geometry.attributes.position.array as Float32Array;
-
-      if (index < (linePositions.length / 3)) {
-        linePositions[index * 3] = relativePosition.x;
-        linePositions[index * 3 + 1] = relativePosition.y;
-        linePositions[index * 3 + 2] = relativePosition.z;
-
-        line.geometry.attributes.position.needsUpdate = true;
-        line.geometry.setDrawRange(0, index + 1);
-        pointIndexRef.current++;
-      }
-
-      map.triggerRepaint();
-      map.flyTo({
-        center: [telemetry.longitude, telemetry.latitude],
-        speed: 0.8,
-        curve: 1,
-        essential: true,
-      });
     }
+
+    // 궤적 포인트 추가 (중복 좌표 필터링)
+    const geo = trajGeoRef.current;
+    if (geo) {
+      const last = lastPosRef.current;
+      const moved = !last ||
+        Math.abs(rel.x - last.x) > MIN_MERCATOR_MOVE ||
+        Math.abs(rel.y - last.y) > MIN_MERCATOR_MOVE ||
+        Math.abs(rel.z - last.z) > MIN_MERCATOR_MOVE;
+
+      if (moved) {
+        const idx = pointIndexRef.current;
+        if (idx < MAX_POINTS) {
+          const buf = geo.attributes.position.array as Float32Array;
+          buf[idx * 3]     = rel.x;
+          buf[idx * 3 + 1] = rel.y;
+          buf[idx * 3 + 2] = rel.z;
+          geo.attributes.position.needsUpdate = true;
+          geo.setDrawRange(0, idx + 1);
+          pointIndexRef.current++;
+          lastPosRef.current = { x: rel.x, y: rel.y, z: rel.z };
+        }
+      }
+    }
+
+    map.triggerRepaint();
+    map.flyTo({
+      center: [telemetry.longitude, telemetry.latitude],
+      speed: 0.8, curve: 1, essential: true,
+    });
   }, [telemetry]);
 
   return (
@@ -205,6 +250,7 @@ export default function MapboxView({ telemetry }: MapboxViewProps) {
         <div className="text-xs text-gray-400">Mapbox 3D View</div>
         <div className="text-sm">위도: {telemetry.latitude.toFixed(6)}°</div>
         <div className="text-sm">경도: {telemetry.longitude.toFixed(6)}°</div>
+        <div className="text-sm font-bold text-yellow-400">고도: {telemetry.altitude.toFixed(1)} m</div>
       </div>
     </div>
   );
